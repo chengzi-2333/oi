@@ -6,8 +6,15 @@ constexpr char sp = ' ';
 int t, n;
 std::vector<int> a;
 
-int solve() {
-    return 0;
+int solve() {  // TODO
+    std::deque<int> p(a.begin(), a.end());
+    while (p.size() > 1) {
+        if (p.back() - p.front() > *(p.rbegin()+1)) {  // Just eat it!
+            p.back() -= p.front();
+            p.pop_front();
+        } else break;
+    }
+    return p.size();
 }
 
 signed main() {
@@ -23,7 +30,7 @@ signed main() {
         std::cin >> n;
         for (int x, y; n; n--) {
             std::cin >> x >> y;
-            a[x] = y;
+            a[x-1] = y;
         }
         std::cout << solve() << lf;
     }
