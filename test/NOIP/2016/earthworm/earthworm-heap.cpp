@@ -8,7 +8,7 @@ using std::max, std::min;
 constexpr char lf = '\n';
 constexpr char sp = ' ';
 
-int n, m, q, u, v, t, offset, worm, part;
+int n, m, q, u, v, t;
 std::priority_queue<int> worms;
 
 signed main() {
@@ -22,14 +22,13 @@ signed main() {
         worms.push(worm);
     }
     for (int tk=0; tk<m; tk++) {
-        offset = q*tk;
-        worm = worms.top() + offset;
-        if (tk % t == t-1) cout << worm << sp;
-        part = worm/v*u;
+        int worm = worms.top() + q*tk;
+        int part = 1ll * worm * u / v;
         worms.pop();
-        worms.push(part - q - offset);
-        worms.push(worm - part - q - offset);
-    }  // TODO
+        worms.push(part - q - q*tk);
+        worms.push(worm - part - q - q*tk);
+        if (tk % t == t-1) cout << worm << sp;
+    }
     cout << endl;
     for (int i=1; i<=n+m; i++) {
         if (i % t == 0) cout << worms.top() + q*m << sp;
