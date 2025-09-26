@@ -9,7 +9,7 @@ constexpr char sp = ' ';
 
 int n, m;
 vector<vector<int>> g, ng;
-vector<int> cnt(1), idx, din, d[2];
+vector<int> cnt, idx, din, d[2];
 vector<bool> vis[2];
 
 namespace Tarjan {
@@ -52,22 +52,20 @@ namespace Tarjan {
             if (!dfn[i]) tarjan(i);
         }
     }
-    
-    inline void clean() {
-        dfn.clear();
-        low.clear();
-        in_stack.clear();
-    }
 
-    inline void shrink(bool flag = false) {
-        for (int u=1; u<=n; u++) {
-            for (const auto& v: g[u]) {
-                int ui = idx[u], vi = idx[v];
-                if (ui != vi) {
-                    if (flag) std::swap(ui, vi);
-                    ng[ui].push_back(vi);
-                    din[vi]++;
-                }
+
+}
+
+inline void shrink(bool flag = false) {
+    din.assign(cnt.size(), 0);
+    ng.assign(cnt.size(), vector<int>());
+    for (int u=1; u<=n; u++) {
+        for (const auto& v: g[u]) {
+            int ui = idx[u], vi = idx[v];
+            if (ui != vi) {
+                if (flag) std::swap(ui, vi);
+                ng[ui].push_back(vi);
+                din[vi]++;
             }
         }
     }
@@ -75,31 +73,32 @@ namespace Tarjan {
 
 void topo(vector<int>& dis, vector<bool>& vi) {
     dis.resize(cnt.size()); vi.resize(cnt.size());
+    vi[idx[1]] = true; dis[idx[1]] = cnt[idx[1]];
     std::queue<int> q;
-    for (int i=1; i<(int) cnt.size(); i++) {
+    for (int i=0; i<(int) cnt.size(); i++) {
         if (!din[i]) {
             q.push(i);
-            dis[i] = cnt[i];
         }
     }
     while (!q.empty()) {
         int u = q.front();
         q.pop();
-        if (vi[u]) continue;
-        vi[u] = true;
         for (const auto& v: ng[u]) {
-            dis[v] = max(dis[v], dis[u] + cnt[v]);
+            if (vi[u]) {
+                vi[v] = true;
+                dis[v] = max(dis[v], dis[u]+cnt[v]);
+            }
             if (--din[v] == 0) q.push(v);
         }
     }
 }
 
 int bridge() {
-    int ans = cnt[idx[1]];
-    for (int u=1; u<(int) ng.size(); u++) {
+    int ans = d[0][idx[1]];
+    for (int u=0; u<(int) ng.size(); u++) {
         for (const auto& v: ng[u]) {
-            if (vis[1][u] && vis[0][v]) {
-                ans = max(ans, d[0][v]+d[1][u]-cnt[idx[1]]);
+            if (vis[0][u] && vis[1][v]) {
+                ans = max(ans, d[1][v]+d[0][u]-cnt[idx[1]]);
             }
         }
     }
@@ -118,21 +117,12 @@ signed main() {
         g[u].push_back(v);
     }
     idx.resize(n+1);
+
     Tarjan::init();
     Tarjan::run();
-    Tarjan::clean();
-
-    d[0].resize(cnt.size()), d[1].resize(cnt.size());
-
-    din.clear(), din.resize(cnt.size());
-    ng.clear(), ng.resize(cnt.size());
-    Tarjan::shrink();
-    topo(d[0], vis[0]);
-
-    din.clear(), din.resize(cnt.size());
-    ng.clear(), ng.resize(cnt.size());
-    Tarjan::shrink(true);
-    topo(d[1], vis[1]);
-
+    
+    shrink(false), topo(d[0], vis[0]);
+    shrink(true), topo(d[1], vis[1]);
+    
     cout << bridge() << endl;
 }
