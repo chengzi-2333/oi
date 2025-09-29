@@ -8,8 +8,7 @@ int n, m;
 vector<vector<int>> g;
 
 int t;
-vector<int> dfn, low;
-set<int> pt;
+vector<int> dfn, low, pt;
 
 void tarjan(int u, int f) {
     dfn[u] = low[u] = ++t;
@@ -19,12 +18,12 @@ void tarjan(int u, int f) {
             child++;
             tarjan(v, u);
             low[u] = min(low[u], low[v]);
-            if (f != u && low[v] >= dfn[u]) pt.insert(u);
+            if (f != u && low[v] >= dfn[u]) pt.push_back(u);
         } else if (v != f) {
             low[u] = min(low[u], dfn[v]);
         }
     }
-    if (f == u && child > 1) pt.insert(u);
+    if (f == u && child >= 2) pt.push_back(u);
 }
 
 signed main() {
@@ -43,6 +42,7 @@ signed main() {
         if (!dfn[u]) tarjan(u, u);
     }
     cout << pt.size() << lf;
+    sort(pt.begin(), pt.end());
     for (const auto& p: pt) cout << p << ' ';
     cout << endl;
 }

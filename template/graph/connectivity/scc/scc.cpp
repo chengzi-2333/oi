@@ -6,10 +6,10 @@ int n, m;
 vector<int> a;
 vector<vector<int>> g;
 
-namespace Tarjan {
+namespace SCC {
     int t;
     vector<vector<int>> ng;
-    vector<int> dfn, low, index, blk(1), din;
+    vector<int> dfn, low, index, scc(1), din;
     vector<bool> vis;
     stack<int> st;
 
@@ -40,19 +40,19 @@ namespace Tarjan {
         }
         if (dfn[u] == low[u]) {
             int top;
-            blk.push_back(0);
+            scc.push_back(0);
             do {
                 top = st.top();
                 st.pop(); vis[top] = false;
-                index[top] = blk.size()-1;
-                blk.back() += a[top];
+                index[top] = scc.size()-1;
+                scc.back() += a[top];
             } while (top != u);
         }
     }
 
     inline void shrink() {
-        ng.resize(blk.size());
-        din.resize(blk.size());
+        ng.resize(scc.size());
+        din.resize(scc.size());
         for (int u=1; u<=n; u++) {
             for (const auto& v: g[u]) {
                 int ui = index[u], vi = index[v];
@@ -73,22 +73,22 @@ namespace Tarjan {
     }
 }
 
-using Tarjan::blk, Tarjan::ng, Tarjan::din;
+using SCC::scc, SCC::ng, SCC::din;
 
 int topo() {
-    vector<int> f(blk.size());
+    vector<int> f(scc.size());
     queue<int> q;
-    for (int i=1; i<(int) blk.size(); i++) {
+    for (int i=1; i<(int) scc.size(); i++) {
         if (!din[i]) {
             q.push(i); 
-            f[i] = blk[i];
+            f[i] = scc[i];
         }
     }
     while (!q.empty()) {
         int u = q.front();
         q.pop();
         for (const auto& v: ng[u]) {
-            f[v] = max(f[v], f[u] + blk[v]);
+            f[v] = max(f[v], f[u] + scc[v]);
             if (--din[v] == 0) q.push(v);
         }
     }
@@ -97,7 +97,7 @@ int topo() {
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("tarjan.in", "r", stdin);
+    freopen("scc.in", "r", stdin);
 #endif
     cin.tie(nullptr) -> sync_with_stdio(false);
     cin >> n >> m; 
@@ -107,9 +107,9 @@ signed main() {
         cin >> u >> v;
         g[u].push_back(v);
     }
-    Tarjan::init();
-    Tarjan::run();
-    Tarjan::clean();
-    Tarjan::shrink();
+    SCC::init();
+    SCC::run();
+    SCC::clean();
+    SCC::shrink();
     cout << topo() << endl;
 }
