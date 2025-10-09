@@ -27,6 +27,12 @@ inline int fast_read() {
     return neg ? -x : x;
 }
 
+// template
+template<typename T, typename... Args>
+inline void fast_read(T& first, Args&... args) {
+    fast_read(first); fast_read(args...);
+}
+
 int n, sum;
 
 signed main() {
