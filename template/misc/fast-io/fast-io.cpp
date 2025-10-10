@@ -1,51 +1,68 @@
-#include <stdio.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-// #define NO_BUF
-
-#ifndef NO_BUF
 #define BUFSIZE (1 << 20)
-char buf[BUFSIZE], *p1=buf, *p2=buf;
-char pbuf[BUFSIZE], *pp=pbuf;
-#endif // NO_BUF
+#define MMAP
+
+namespace IO {
+#ifdef MMAP
+char* rp;
+#else
+char rbuf[BUFSIZE], *rp = rbuf, *bp = rbuf;
+#endif
+char wbuf[BUFSIZE], *wp = wbuf;
 
 inline char get() {
-#ifdef NO_BUF
-    return getchar_unlocked();
-#else // NO_BUF
-    if (p1 == p2) p2 = (p1 = buf) + fread(buf, 1, BUFSIZE, stdin);
-    return (p1 == p2 ? ' ' : *p1++);
-#endif // NO_BUF
+#ifdef MMAP
+    return *rp++;
+#else
+    if (rp == bp)
+        bp = (rp = rbuf) + fread(rbuf, 1, BUFSIZE, stdin);
+    return (rp == bp ? ' ' : *rp++);
+#endif
+}
+
+inline void flush() {
+    fwrite(wbuf, 1, wp - wbuf, stdout);
+    wp = wbuf;
 }
 
 inline void put(const char& c) {
-#ifdef NO_BUF
-    putchar_unlocked(c);
-#else // NO_BUF
-    if (pp - pbuf == BUFSIZE) fwrite(pbuf, 1, BUFSIZE, stdout), pp = pbuf;
-    *pp++ = c;
-#endif // NO_BUF
+    if (wp - wbuf == BUFSIZE)
+        flush();
+    *wp++ = c;
 }
 
-#ifndef NO_BUF
-inline void push() {
-    fwrite(pbuf, 1, pp - pbuf, stdout);
+inline void mmap_init() {
+#ifdef MMAP
+    struct stat state;
+    fstat(STDIN_FILENO, &state);
+    rp = (char*)mmap(NULL, state.st_size, PROT_READ, MAP_PRIVATE, STDIN_FILENO,
+                     0);
+#endif  // MMAP
 }
-#endif
 
-template<typename T>
+// #define get() getchar_unlocked()
+// #define put(x) putchar_unlocked(x)
+
+template <typename T>
 inline void fast_read(T& x) {
     char c;
     x = 0;
     T neg = 1;
     while (!isdigit(c = get())) {
-        if (c == '-') neg = -1;
+        if (c == '-')
+            neg = -1;
     }
-    do x = x * 10 + neg*(c - '0');
+    do
+        x = x * 10 + neg * (c - '0');
     while (isdigit(c = get()));
 }
 
-template<typename T>
+template <typename T>
 inline void fast_write(T x) {
     T neg = 1;
     if (x < 0) {
@@ -53,54 +70,62 @@ inline void fast_write(T x) {
         put('-');
     }
     static char st[40];
-    char* p = st;
+    char* tp = st;
     do {
-        *p++ = '0' + neg*(x%10);
+        *tp++ = '0' + neg * (x % 10);
         x /= 10;
     } while (x);
-    while (p != st) put(*--p);
+    while (tp != st)
+        put(*--tp);
 }
 
-template<typename T>
+template <typename T>
 inline void fast_read_u(T& x) {
     char c;
     x = 0;
-    while (!isdigit(c = get()));
-    do x = x*10 + (c - '0');
+    while (!isdigit(c = get()))
+        ;
+    do
+        x = x * 10 + (c - '0');
     while (isdigit(c = get()));
 }
 
-template<typename T>
+template <typename T>
 inline void fast_write_u(T x) {
     static char st[40];
-    char* p = st;
+    char* tp = st;
     do {
-        *p++ = x%10 + '0';
+        *tp++ = x % 10 + '0';
         x /= 10;
     } while (x);
-    while (p != st) put(*--p);
+    while (tp != st)
+        put(*--tp);
 }
 
-template<typename T, typename... Args>
+template <typename T, typename... Args>
 inline void fast_read(T& first, Args&... args) {
-    fast_read(first); fast_read(args...);
+    fast_read(first);
+    fast_read(args...);
 }
 
-template<typename T, typename... Args>
+template <typename T, typename... Args>
 inline void fast_read_u(T& fst, Args&... args) {
     fast_read_u(fst), fast_read_u(args...);
 }
+}  // namespace IO
 
 int n, a, sum;
 
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("fast-io.in", "r", stdin);
-#endif // ONLINE_JUDGE
-    fast_read(n);
-    while (n--) fast_read(a), sum += a;
-    fast_write(sum);
-#ifndef NO_BUF
-    push();  // Don't forget to push buffer to stdout!
-#endif
+#endif  // ONLINE_JUDGE
+    IO::mmap_init();
+    IO::fast_read(n);
+    while (n--) {
+        IO::fast_read(a);
+        sum += a;
+    }
+    IO::fast_write(sum);
+    IO::flush();  // Don't forget to push buffer to stdout!
 }
