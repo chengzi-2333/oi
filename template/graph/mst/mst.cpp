@@ -1,6 +1,29 @@
-#include <bits/stdc++.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+#include <vector>
+#include <tuple>
+#include <algorithm>
+
 
 typedef std::tuple<int, int, int> Triple;
+
+char* rp;
+
+inline void fast_read(int& x) {
+	char c;
+	x = 0;
+	while (!isdigit(c = *rp++));
+	do x = x * 10 + (c - '0');
+	while (isdigit(c = *rp++));
+}
+
+template<typename T, typename... A>
+inline void fast_read(T& fst, A&... args) {
+	fast_read(fst), fast_read(args...);
+}
 
 class DSU {
 private:
@@ -42,8 +65,8 @@ public:
 	
 	int count() {
 		int s=0;
-		for (int i=1; i<=(int) uni.size(); i++)
-			if (uni[i]==i)
+		for (int i=1; i<(int) uni.size(); i++)
+			if (!uni[i])
 				s++;
 		return s;
 	}
@@ -67,19 +90,19 @@ int main() {
 #ifndef ONLINE_JUDGE
     freopen("mst.in", "r", stdin);
 #endif
-    std::cin.tie(nullptr)->sync_with_stdio(false);
-    std::cin >> n >> m;
+	struct stat st;
+	fstat(0, &st);
+	rp = (char*) mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, 0, 0);
+	fast_read(n, m);
     edges.resize(m);
     DSU dsu(n);
     for (auto& [w, u, v]: edges) {
-        std::cin >> u >> v >> w;
+		fast_read(u, v, w);
         dsu.insert(u, v);
     }
-    if (dsu.count() != 1) {
-        std::cout << "orz" << '\n';
-        return 0;
-    }
-    std::sort(edges.begin(), edges.end());
-    std::cout << kruskal() << std::endl;
-    // TODO
+    if (dsu.count() != 1) puts("orz");
+	else {
+    	std::sort(edges.begin(), edges.end());
+		printf("%d\n", kruskal());
+	}
 }

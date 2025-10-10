@@ -58,8 +58,8 @@ public:
 	
 	int count() {
 		int s=0;
-		for (int i=1; i<=(int) uni.size(); i++)
-			if (uni[i]==i)
+		for (int i=1; i<(int) uni.size(); i++)
+			if (!uni[i])
 				s++;
 		return s;
 	}
