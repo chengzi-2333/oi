@@ -1,5 +1,28 @@
 // {P5304}
 #include <bits/stdc++.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+char* rp;
+
+inline void fast_read(int& x) {
+	char c;
+	x = 0;
+	while (!isdigit(c = *rp++));
+	do x = x*10 + (c - '0');
+	while (isdigit(c = *rp++));
+}
+
+template<typename T, typename... Args>
+inline void fast_read(T& first, Args&... args) {
+	fast_read(first); fast_read(args...);
+}
+
+inline void mmap_init() {
+    struct stat st;
+    fstat(0, &st);
+    rp = (char*) mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, 0, 0);
+}
 
 using std::cin, std::cout, std::endl;
 using std::vector, std::pair, std::tuple;
@@ -55,21 +78,22 @@ signed main() {
 #ifndef ONLINE_JUDGE
     freopen("traveller.in", "r", stdin);
 #endif
-    std::cin.tie(nullptr)->sync_with_stdio(false);
-    int t; cin >> t;
+    mmap_init();
+    int t;
+    fast_read(t);
     while (t--) {
-        cin >> n >> m >> k;
+        fast_read(n, m, k);
         g.resize(n+1); 
         dis.resize(n+1);
         prefered.resize(n+1);
         vis.resize(n+1);
         for (int u, v, w; m; m--) {
-            cin >> u >> v >> w;
+            fast_read(u, v, w);
             if (u == v) continue;
             g[u].emplace_back(w, v);
         }
         for (int u; k; k--) {
-            cin >> u;
+            fast_read(u);
             prefered[u] = true;
         }
         cout << solve() << lf;
