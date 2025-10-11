@@ -1,3 +1,4 @@
+// {P3367}
 #include <cstdio>
 #include <vector>
 #include <numeric>

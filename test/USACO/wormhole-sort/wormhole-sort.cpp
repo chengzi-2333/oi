@@ -1,3 +1,4 @@
+// {P6004}
 #include <bits/stdc++.h>
 
 inline void fast_read(int& x) {

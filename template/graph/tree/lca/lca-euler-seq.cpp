@@ -1,3 +1,4 @@
+// {P3379}
 // Euler sequence + RMQ (ST implemented)
 #include <bits/stdc++.h>
 
@@ -22,7 +23,8 @@ void init_st() {
     for (int i=2; i<=n; i++) lg[i] = lg[i >> 1]+1;
     for (int i=1; i<=n; i++) {
         for (int j=1; j<=lg[n]; j++) {
-            st[i][j] = min(st[i][j-1], st[][]);
+            // st[i][j] = min(st[i][j-1], st[][]);
+            // TODO
         }
     }
 }

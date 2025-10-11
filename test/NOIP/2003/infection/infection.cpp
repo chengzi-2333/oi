@@ -1,3 +1,4 @@
+// {P1041}
 #include <bits/stdc++.h>
 
 constexpr char lf = '\n';

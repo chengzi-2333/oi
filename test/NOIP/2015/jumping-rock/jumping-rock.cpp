@@ -1,3 +1,4 @@
+// {P2678}
 #include <bits/stdc++.h>
 
 int d, n, m;
