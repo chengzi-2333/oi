@@ -1,5 +1,31 @@
+// {U300099}
 // TODO: translate and rewrite
 #include <bits/stdc++.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+char* rp;
+
+template<typename T>
+inline void fast_read(T& x) {
+	char c;
+	x = 0;
+	while (!isdigit(c = *rp++));
+	do x = x*10 + (c - '0');
+	while (isdigit(c = *rp++));
+}
+
+template<typename T, typename... Args>
+inline void fast_read(T& first, Args&... args) {
+	fast_read(first); fast_read(args...);
+}
+
+inline void mmap_init() {
+    struct stat st;
+    fstat(0, &st);
+    rp = (char*) mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, 0, 0);
+}
+
 using namespace std;
 
 /*! T is the type of the elements
@@ -67,18 +93,41 @@ class DisjointSparseTable {
     Monoid operate;
 };
 
+template<typename F>
 void test() {
     // Tests the DisjointSparseTable
     vector<int> data{6, 2, 4, 1, 7, 3, 4, 2, 7, 2, 4, 1, 6};
-    DisjointSparseTable<int, multiplies<>, 0> sp{data};
+    DisjointSparseTable<int, F, 0> sp{data};
     for (size_t start = 0; start < data.size(); ++start) {
         for (size_t end = start + 1; end <= data.size(); ++end) {
             assert(sp.query(start, end) ==
-                   accumulate(begin(data) + start, begin(data) + end, 1, multiplies<>()));
+                   accumulate(begin(data) + start, begin(data) + end, 0, F()));
         }
     }
 }
 
+constexpr long long MOD = 1e9+7;
+int n, q, ans;
+vector<long long> a;
+
+struct op {
+    long long operator()(long long a, long long b) const {
+        return ((a % MOD) * (b % MOD)) % MOD;
+    };
+};
+
 int main() {
-    test();
+#ifndef ONLINE_JUDGE
+    freopen("disjoint-sparse-table.in", "r", stdin);
+#endif // ONLINE_JUDGE
+    mmap_init();
+    fast_read(n, q);
+    a.resize(n);
+    for (auto& i: a) fast_read(i);
+    DisjointSparseTable<long long, op, 1> sp{a};
+    for (int l, r; q; q--) {
+        fast_read(l, r);
+        ans ^= sp.query(l-1, r) % MOD;
+    }
+    printf("%d", ans);
 }

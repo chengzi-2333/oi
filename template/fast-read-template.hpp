@@ -4,7 +4,8 @@
 
 char* rp;
 
-inline void fast_read(int& x) {
+template<typename T>
+inline void fast_read(T& x) {
 	char c;
 	x = 0;
 	while (!isdigit(c = *rp++));
