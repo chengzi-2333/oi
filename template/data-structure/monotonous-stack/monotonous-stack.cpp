@@ -2,7 +2,10 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#define BUFSIZE (1 << 20)
+
 char* rp;
+char wbuf[BUFSIZE], *wp = wbuf;
 
 template <typename T>
 inline void fast_read(T& x) {
@@ -12,15 +15,20 @@ inline void fast_read(T& x) {
 	while (isdigit(*rp));
 }
 
-template <typename T, typename... Args>
-inline void fast_read(T& first, Args&... args) {
-	fast_read(first); fast_read(args...);
-}
-
 inline void mmap_init() {
     struct stat st;
     fstat(0, &st);
     rp = (char*) mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, 0, 0);
+}
+
+inline void flush() {
+    fwrite(wbuf, 1, wp - wbuf, stdout);
+    wp = wbuf;
+}
+
+inline void put(const char& c) {
+    if (wp - wbuf == BUFSIZE) flush();
+    *wp++ = c;
 }
 
 template <typename T>
@@ -30,11 +38,15 @@ inline void fast_write(T x) {
         *pt++ = '0' + x % 10;
         x /= 10;
     } while (x);
-    while (pt != st) putchar_unlocked(*--pt);
+    while (pt != st) put(*--pt);
 }
 
-int n, cnt;
-std::stack<int> st;
+constexpr int N = 3e6;
+
+struct pair {
+    int first, second;
+} st[N+2], *sp = st - 1;
+int n, p, f[N+2], *fp = f;
 
 signed main() {
 #ifndef ONLINE_JUDGE
@@ -44,12 +56,12 @@ signed main() {
     fast_read(n);
     for (int a, i = 1; i <= n; i++) {
         fast_read(a);
-        while (!st.empty() && st.top() < a) {
-            // TODO
-            fast_write(i), putchar_unlocked(' ');
-            st.pop();
-            cnt++;
+        while (sp >= st && sp->second < a) {
+            f[sp->first-1] = i;
+            sp--;
         }
-        st.push(a);
+        *++sp = {i, a};
     }
+    while (fp - f < n) fast_write(*fp++), put(' ');
+    flush();
 }
