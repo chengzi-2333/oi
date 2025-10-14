@@ -112,11 +112,10 @@ namespace IO {
 }  // namespace IO
 
 struct DSU {
-    std::vector<int> fa, rank;
+    std::vector<int> fa;
 
     DSU(int n) {
         fa.resize(n+1);
-        rank.resize(n+1, 1);
     }
 
     int root(int x) {
@@ -124,11 +123,7 @@ struct DSU {
     }
 
     void insert(int x, int y) {
-        x = root(x), y = root(y);
-        if (x == y) return;
-        if (rank[y] < rank[x]) std::swap(x, y);
-        if (rank[x] == rank[y]) rank[y] = rank[x] + 1;
-        fa[y] = x;
+        fa[root(y)] = root(x);
     }
 };
 
@@ -140,7 +135,6 @@ signed main() {
 #ifndef ONLINE_JUDGE
     freopen("max-num.in", "r", stdin);
 #endif // ONLINE_JUDGE
-    // std::cin.tie(nullptr)->sync_with_stdio(false);
     IO::mmap_init();
     IO::fast_read_u(t, mod);
     num.resize(t+1);
