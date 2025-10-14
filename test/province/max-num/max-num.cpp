@@ -1,6 +1,4 @@
-#include <ctype.h>
-#include <stdio.h>
-#include <unistd.h>
+#include <bits/stdc++.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
@@ -112,3 +110,57 @@ namespace IO {
         return c;
     }
 }  // namespace IO
+
+struct DSU {
+    std::vector<int> fa, rank;
+
+    DSU(int n) {
+        fa.resize(n+1);
+        rank.resize(n+1, 1);
+    }
+
+    int root(int x) {
+        return fa[x] ? fa[x] = root(fa[x]) : x;
+    }
+
+    void insert(int x, int y) {
+        x = root(x), y = root(y);
+        if (x == y) return;
+        if (rank[y] < rank[x]) std::swap(x, y);
+        if (rank[x] == rank[y]) rank[y] = rank[x] + 1;
+        fa[y] = x;
+    }
+};
+
+
+int t, mod, q, cnt;
+std::vector<int> st, num;
+
+signed main() {
+#ifndef ONLINE_JUDGE
+    freopen("max-num.in", "r", stdin);
+#endif // ONLINE_JUDGE
+    // std::cin.tie(nullptr)->sync_with_stdio(false);
+    IO::mmap_init();
+    IO::fast_read_u(t, mod);
+    num.resize(t+1);
+    DSU dsu(t);
+    for (long long a; t; t--) {
+        if (IO::get_char() == 'A') {
+            IO::fast_read(a);
+            cnt++;
+            num[cnt] = (a + q) % mod;
+            while (!st.empty() && num[st.back()] <= num[cnt]) {
+                dsu.insert(cnt, st.back());
+                st.pop_back();
+            }
+            st.push_back(cnt);
+        } else {
+            IO::fast_read(a);
+            q = num[dsu.root(cnt-a+1)];
+            IO::fast_write(q);
+            IO::put('\n');
+        }
+    }
+    IO::flush();
+}
