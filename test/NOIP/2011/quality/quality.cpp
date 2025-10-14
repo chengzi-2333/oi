@@ -1,4 +1,4 @@
-// {P5019} {P3078} {P1969}
+// {P1314}
 #include <bits/stdc++.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -107,21 +107,45 @@ namespace IO {
 }  // namespace IO
 
 
-long long n, a, p, ans;
+int n, m;
+long long s;
+std::vector<std::pair<int, int>> stone, range;
+
+long long calculate(const int& w) {
+    long long sum = 0;
+    static std::vector<long long> sum_a(n+1), sum_b(n+1);
+    for (int i = 1; i <= n; i++) {
+        sum_a[i] = (stone[i-1].first >= w);
+        sum_b[i] = sum_a[i] * stone[i-1].second;
+        sum_a[i] += sum_a[i-1];
+        sum_b[i] += sum_b[i-1];
+    }
+    for (const auto& [l, r]: range) {
+        sum += (sum_a[r] - sum_a[l-1]) * (sum_b[r] - sum_b[l-1]);
+    }
+    return sum;
+}
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("road.in", "r", stdin);
+    freopen("quality.in", "r", stdin);
 #endif // ONLINE_JUDGE
     // std::cin.tie(nullptr)->sync_with_stdio(false);
     IO::mmap_init();
-    IO::fast_read_u(n, p);
-    ans += p;
-    while (--n) {
-        IO::fast_read_u(a);
-        ans += std::max(0ll, a - p);
-        p = a;
+    IO::fast_read_u(n, m, s);
+    stone.resize(n); range.resize(m);
+    for (auto& [w, v]: stone) IO::fast_read_u(w, v);
+    for (auto& [l, r]: range) IO::fast_read_u(l, r);
+    long long ans = s;
+    int l = 1, r = std::max_element(stone.begin(), stone.end())->first;
+    while (l <= r) {
+        int mid = l + ((r - l) >> 1);
+        long long res = calculate(mid);
+        if (res > s) l = mid + 1;
+        else r = mid - 1;
+        ans = std::min(ans, std::abs(s - res));
     }
-    IO::fast_write(ans);
+    IO::fast_write_u(ans);
+    IO::put('\n');
     IO::flush();
 }
