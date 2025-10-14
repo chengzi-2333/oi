@@ -1,9 +1,6 @@
-// {P10815}
-#include <ctype.h>
-#include <stdio.h>
+#include <bits/stdc++.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #define BUFSIZE (1 << 20)
 #define MMAP
@@ -108,18 +105,12 @@ namespace IO {
     }
 }  // namespace IO
 
-int n, a, sum;
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("fast-io.in", "r", stdin);
-#endif  // ONLINE_JUDGE
+    freopen("monotonous-queue.in", "r", stdin);
+#endif // ONLINE_JUDGE
+    // std::cin.tie(nullptr)->sync_with_stdio(false);
     IO::mmap_init();
-    IO::fast_read(n);
-    while (n--) {
-        IO::fast_read(a);
-        sum += a;
-    }
-    IO::fast_write(sum);
-    IO::flush();  // Don't forget to push buffer to stdout!
+    // TODO
 }
