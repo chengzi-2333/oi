@@ -1,4 +1,4 @@
-// {P1886}
+// {P5019} {P3078}
 #include <bits/stdc++.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -107,35 +107,21 @@ namespace IO {
 }  // namespace IO
 
 
-int n, k;
-char* p = IO::rp;
-
-inline void run(const std::function<bool(int, int)>& cmp) {
-    std::deque<std::pair<int, int>> que;
-    for (int a, i = 1; i <= n; i++) {
-        IO::fast_read(a);
-        while (!que.empty() && cmp(que.back().second, a)) 
-            que.pop_back();
-        que.emplace_back(i, a);
-        while (!que.empty() && que.front().first <= i - k) 
-            que.pop_front();
-        if (i >= k) {
-            IO::fast_write(que.front().second);
-            IO::put(' ');
-        }
-    }
-    IO::put('\n');
-}
+long long n, a, p, ans;
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("monotonous-queue.in", "r", stdin);
+    freopen("road.in", "r", stdin);
 #endif // ONLINE_JUDGE
+    // std::cin.tie(nullptr)->sync_with_stdio(false);
     IO::mmap_init();
-    IO::fast_read_u(n, k);
-    p = IO::rp;
-    run(std::greater_equal<>());
-    IO::rp = p;
-    run(std::less_equal<>());
+    IO::fast_read_u(n, p);
+    ans += p;
+    while (--n) {
+        IO::fast_read_u(a);
+        ans += std::max(0ll, a - p);
+        p = a;
+    }
+    IO::fast_write(ans);
     IO::flush();
 }

@@ -1,3 +1,4 @@
+// {P1379}
 #include <bits/stdc++.h>
 
 using State = std::tuple<int, int, std::string>;
