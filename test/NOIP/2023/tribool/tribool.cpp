@@ -112,10 +112,10 @@ namespace IO {
 }  // namespace IO
 
 
+constexpr int N = 1e5;
 constexpr int T = 100001, F = -T, U = 0;
-int c, t, n, m;
-std::vector<int> fa;
-std::vector<bool> vis;
+int c, t, n, m, fa[N+5];
+bool vis[2*N+10];
 
 int query(int x) {
     if (x == T || x == F) return x;
@@ -148,9 +148,7 @@ signed main() {
     IO::fast_read_u(c, t);
     while (t--) {
         IO::fast_read_u(n, m);
-        fa.resize(n+1);
-        vis.resize(2*n+2);
-        std::iota(fa.begin(), fa.end(), 0);
+        std::iota(fa, fa + n + 1, 0);
         for (int op, a, b; m; m--) {
             op = IO::get_char();
             IO::fast_read_u(a);
