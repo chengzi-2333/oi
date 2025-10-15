@@ -112,62 +112,74 @@ namespace IO {
 }  // namespace IO
 
 
-#define T 1
-#define F -1
-#define U 0
-
-struct ExDSU {
-    int n;
-    std::vector<int> fa;
-
-    ExDSU(int _n) {
-        n = _n;
-        fa.resize(n*2+2);
-    }
-
-    int root(int u) {
-        return fa[u] ? fa[u] = root(fa[u]) : u;
-    }
-
-    void insert(int u, int v) {
-        fa[root(u)] = root(v);
-    }
-
-    bool related(int u, int v) {
-        return root(u) == root(v);
-    }
-
-    void insert_inv(int inv_x, int y) {
-        insert(inv_x+n, y);
-    }
-};
-
+constexpr int T = 100001, F = -T, U = 0;
 int c, t, n, m;
+std::vector<int> fa;
+std::vector<bool> vis;
+
+int query(int x) {
+    if (x == T || x == F) return x;
+    else if (vis[n-x] || x == U) return U;
+    else if (vis[n+x]) return T;
+    int ret = 0;
+    if (x < 0) {
+        if (x == -fa[-x]) return x;
+        else {
+            vis[n+x] = true;
+            ret = query(-fa[-x]);
+            vis[n+x] = false;
+        }
+    } else {
+        if (x == fa[x]) return x;
+        else {
+            vis[n+x] = true;
+            ret = fa[x] = query(fa[x]);
+            vis[n+x] = false;
+        }
+    }
+    return ret;
+}
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("tribool1.in", "r", stdin);
+    freopen("tribool4.in", "r", stdin);
 #endif // ONLINE_JUDGE
     IO::mmap_init();
     IO::fast_read_u(c, t);
     while (t--) {
         IO::fast_read_u(n, m);
-        ExDSU dsu(n);
+        fa.resize(n+1);
+        vis.resize(2*n+2);
+        std::iota(fa.begin(), fa.end(), 0);
         for (int op, a, b; m; m--) {
             op = IO::get_char();
             IO::fast_read_u(a);
             switch (op) {
                 case '+':
                     IO::fast_read_u(b);
-                    dsu.insert(b, a);
+                    fa[a] = fa[b];
+                    break;
                 case '-':
                     IO::fast_read_u(b);
-                    dsu.insert_inv(b, a);
-                case 'T': dsu.fa[a] = T;
-                case 'F': dsu.fa[a] = F;
-                case 'U': dsu.fa[a] = U;
+                    fa[a] = -fa[b];
+                    break;
+                case 'T': 
+                    fa[a] = T;
+                    break;
+                case 'F': 
+                    fa[a] = F;
+                    break;
+                case 'U': 
+                    fa[a] = U;
+                    break;
             }
         }
-        // TODO
+        int ans = 0;
+        for (int i=1; i<=n; i++) {
+            ans += (query(i) == U);
+        }
+        IO::fast_write_u(ans);
+        IO::put('\n');
     }
+    IO::flush();
 }
