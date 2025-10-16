@@ -4,6 +4,7 @@
 !*.cpp
 !*.in
 !*.hpp
+!*.sh
 !*.json
 !*/
 
