@@ -119,4 +119,5 @@ signed main() {
     IO::fast_read_u(n);
     for (auto it = a + 1; it - a <= n; it++) IO::fast_read_u(*it);
     for (auto it = b + 1; it - b <= n; it++) IO::fast_read_u(*it);
+    // TODO
 }
