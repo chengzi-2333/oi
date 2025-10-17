@@ -109,15 +109,32 @@ namespace IO {
 
 
 constexpr int N = 1e5;
-int n, a[N+5], b[N+5], p[N+5], f[N+5];
+int n, a[N+5], mp[N+5], f[N+5];
+
+inline int lis(const std::function<bool(int, int)>& cmp) {
+    auto rev_cmp = std::bind(cmp, std::placeholders::_2, std::placeholders::_1);
+    // memset(f, 0, (n+1) * sizeof(f));
+    int* fp = f + 1;
+    *fp = *(a + 1);
+    for (auto ap = a + 2; ap - a <= n; ap++) {
+        (cmp(*ap, *fp) ? *++fp : *std::lower_bound(f + 1, fp + 1, *ap, rev_cmp)) = *ap;
+    }
+    return fp - f;
+}
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("lcs-bisect.in", "r", stdin);
+    freopen("lcs.in", "r", stdin);
 #endif // ONLINE_JUDGE
     IO::mmap_init();
     IO::fast_read_u(n);
-    for (auto it = a + 1; it - a <= n; it++) IO::fast_read_u(*it);
-    for (auto it = b + 1; it - b <= n; it++) IO::fast_read_u(*it);
-    // TODO
+    for (int v, i = 1; i<=n; i++) {
+        IO::fast_read_u(v);
+        mp[v] = i;
+    }
+    for (int v, i = 1; i<=n; i++) {
+        IO::fast_read_u(v);
+        a[i] = mp[v];
+    }
+    printf("%d\n", lis(std::greater<>()));
 }
