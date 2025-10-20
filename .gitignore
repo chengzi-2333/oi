@@ -1,11 +1,19 @@
 *
+!*/
 !.gitignore
-!*.md
+
+# source code
 !*.cpp
-!*.in
 !*.hpp
+
+# input/output/answer file
+!*.in
+!*.out
+!*.ans
+
+# others
+!*.md
 !*.sh
 !*.json
-!*/
 
 .vscode/
