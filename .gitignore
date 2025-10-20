@@ -6,9 +6,8 @@
 !*.cpp
 !*.hpp
 
-# input/output/answer file
+# input/answer file
 !*.in
-!*.out
 !*.ans
 
 # others
