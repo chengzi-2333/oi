@@ -31,6 +31,7 @@ inline int solve() {
 
 int main() {
     freopen("color1.in", "r", stdin);
+    std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> t;
     while (t--) {
         memset(cnt, 0, sizeof(cnt));

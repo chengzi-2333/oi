@@ -1,42 +1,39 @@
 #include <bits/stdc++.h>
 
-template <typename T>
-inline void fast_read(T& x) {
-    char c;
-    x = 0;
-    while (!isdigit(c = getchar()));
-    do x = x * 10 + (c - '0');
-    while (isdigit(c = getchar()));
-}
-
-template <typename T, typename... A>
-inline void fast_read(T& x, A&... a) {
-    fast_read(x), fast_read(a...);
-}
-
-
 constexpr int N = 2e5;
-int t, n, k;
-char s[N+5];
+int t, n, k, cnt[26];
+char s[N+2];
 
 inline int solve() {
-    return n/k;
-    // int l=1, r=n;
-    // while (l <= r) {
-    //     int mid = l+((r-l)>>1);
-    //     if (check(mid)) l = mid + 1;
-    //     else r = mid - 1;
-    // }
-    // return r;
+    int c = 0;
+    for (int i = 0; i < n; i++) {
+        if (cnt[s[i]-'a']++ == 0) {
+            c++;
+        }
+    }
+    int ans = 0;
+    if (c == 1) ans = n / k;
+    else {
+        int pa = 0, lf = 0;
+        for (int i = 0; i < 26; i++) {
+            pa += cnt[i] / 2;
+            lf += cnt[i] % 2;
+        }
+        ans = pa / k * 2;
+        lf += (pa % k) * 2;
+        if (lf >= k) ans++;
+    }
+    return ans;
 }
 
 int main() {
     freopen("color.in", "r", stdin);
     freopen("color.out", "w", stdout);
-    fast_read(t);
+    std::cin.tie(nullptr)->sync_with_stdio(false);
+    std::cin >> t;
     while (t--) {
-        fast_read(n, k);
-        scanf("%s", s+1);
-        printf("%d\n", solve());
+        memset(cnt, 0, sizeof(cnt));
+        std::cin >> n >> k >> s;
+        std::cout << solve() << '\n';
     }
 }
