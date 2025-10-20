@@ -1,15 +1,9 @@
-// {P3367}
-#include <cstdio>
-#include <vector>
-#include <numeric>
-#include <ctype.h>
-#include <unistd.h>
-#include <algorithm>
+// {P3366}
+#include <bits/stdc++.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-// #define DSU_RECURSIVE
-#define BUFSIZE (1 << 20)
+#define BUFSIZE (1 << 0)
 #define MMAP
 
 namespace IO {
@@ -110,73 +104,44 @@ namespace IO {
     inline void fast_read_u(T& fst, Args&... args) {
         fast_read_u(fst), fast_read_u(args...);
     }
-
-    inline char get_char() {
-        char c;
-        while (isspace(c = get()));
-        return c;
-    }
 }  // namespace IO
 
 
-class DSU {
-private:
-	std::vector<int> uni, rank;
-	
-public:
-	DSU(int n) {
-		uni.resize(n + 1);
-		rank.resize(n + 1);
-		// std::iota(uni.begin(), uni.end(), 0);
-	}
-
-#ifdef DSU_RECURSIVE
-	// recursive
-	int root(int x) {
-		// return (uni[x] == x) ? x : uni[x] = root(uni[x]);
-		return uni[x] ? uni[x] = root(uni[x]) : x;
-	}
-#else
-	// loop-based
-	int root(int x) {
-		int t = x, nt = t;
-		while (uni[x]) x = uni[x];
-		while (uni[t]) nt = uni[t], uni[t] = x, t = nt;
-		return x;
-	}
-#endif
-
-	void insert(int x, int y) {
-        x = root(x), y = root(y);
-        if (x == y) return;
-        if (rank[y] < rank[x]) std::swap(x, y);
-        if (rank[x] == rank[y]) rank[y] = rank[x]+1;
-        uni[x] = y;
-	}
-	
-	bool related(int x, int y) {
-		return root(x) == root(y);
-	}
-	
-	int count() {
-		return std::count(uni.begin() + 1, uni.end(), 0);
-	}
-};
-
-
+using PII = std::pair<int, int>;
+constexpr int N = 5000;
 int n, m;
+std::bitset<N+2> vis;
+std::vector<PII> g[N+2];
+std::priority_queue<PII, std::vector<PII>, std::greater<>> h;
+
+inline int prim() {
+    int ans = 0;
+    h.emplace(0, 1);
+    while (!h.empty()) {
+        auto [wu, u] = h.top();
+        h.pop();
+        if (vis.test(u)) continue;
+        vis.set(u);
+        ans += wu;
+        for (const auto& p: g[u]) {
+            if (!vis.test(p.second)) h.push(p);
+        }
+    }
+    return (vis.count() == n) ? ans : -1;
+}
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("dsu.in", "r", stdin);
+    freopen("mst.in", "r", stdin);
 #endif // ONLINE_JUDGE
-	IO::mmap_init();
-	IO::fast_read(n, m);
-	DSU dsu(n);
-	for (int op, x, y; m; m--) {
-		IO::fast_read(op, x, y);
-		if (--op) IO::put(dsu.related(x, y) ? 'Y' : 'N'), IO::put('\n');
-		else dsu.insert(x, y);
-	}
-	IO::flush();
+    IO::mmap_init();
+    IO::fast_read_u(n, m);
+    for (int u, v, w; m; m--) {
+        IO::fast_read_u(u, v, w);
+        g[u].emplace_back(w, v);
+        g[v].emplace_back(w, u);
+    }
+    int ans = prim();
+    if (ans == -1) puts("orz");
+    else printf("%d\n", ans);
 }

@@ -8,7 +8,7 @@ vector<int> f;
 
 signed main() {
 #ifndef ONLINE_JUDGE
-    freopen("01-backpack.in", "r", stdin);
+    freopen("01-knapsack.in", "r", stdin);
 #endif
     std::cin.tie(nullptr)->sync_with_stdio(false);
     cin >> c >> n; f.resize(c+1);
