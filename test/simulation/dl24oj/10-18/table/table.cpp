@@ -15,8 +15,14 @@ inline void fast_read(T& x, A&... a) {
 }
 
 
+int n, m, l, r;
+std::deque<int> target;
+
 int main() {
-    freopen("table.in", "r", stdin);
-    freopen("table.out", "w", stdout);
-    printf("%d\n", 1);
+    freopen("table1.in", "r", stdin);
+    // freopen("table.out", "w", stdout);
+    fast_read(n, m);
+    target.resize(n);
+    for (auto& t: target) fast_read(t);
+    target.push_front(0);
 }
