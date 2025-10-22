@@ -1,5 +1,7 @@
-#include <bits/stdc++.h>
-
+// {P3372}
+#include <iostream>
+#include <memory>
+#include <vector>
 
 // T: element type, I: identity of the operation, F: operation
 template <typename T, T I = T(), typename F = std::plus<T>>
@@ -37,13 +39,13 @@ private:
     }
 
 public:
-    SegmentTree(size_t l, size_t r, int* arr = nullptr): l(l), r(r) {
+    SegmentTree(size_t l, size_t r, const std::vector<T>& arr = {}): l(l), r(r) {
         if (l != r) {
             auto mid = middle();
             this->left = std::make_unique<SegmentTree>(l, mid, arr);
             this->right = std::make_unique<SegmentTree>(mid + 1, r, arr);
             this->push_up();
-        } else if (arr) this->key = arr[l];
+        } else if (!arr.empty()) this->key = arr[l];
     }
 
     void update(size_t l, size_t r, T k) {
@@ -93,13 +95,13 @@ private:
     }
 
 public:
-    UnlazySegmentTree(size_t l, size_t r, int* arr = nullptr): l(l), r(r) {
+    UnlazySegmentTree(size_t l, size_t r, const std::vector<T>& arr = {}): l(l), r(r) {
         if (l != r) {
             auto mid = middle();
             this->left = std::make_unique<UnlazySegmentTree>(l, mid, arr);
             this->right = std::make_unique<UnlazySegmentTree>(mid + 1, r, arr);
             this->push_up();
-        } else if (arr) this->key = arr[l];
+        } else if (!arr.empty()) this->key = arr[l];
     }
 
     void update(size_t l, size_t r, T k) {
@@ -120,45 +122,27 @@ public:
     }
 };
 
-struct Min {
-    int operator ()(int a, int b) const {
-        return std::min(a, b);
-    }
-};
 
-constexpr int N = 2e5;
+long long n, m;
 
-struct Query {
-    int l, r, next;
-} que[N + 2];
-int head[N + 2];
-int lst[N + 2], p[N + 2];
-int ans[N + 2];
-int n, m, target[N + 2];
-
-int main() {
-    freopen("table1.in", "r", stdin);
-    // freopen("table.out", "w", stdout);
+signed main() {
+#ifndef ONLINE_JUDGE
+    freopen("segment-tree.in", "r", stdin);
+#endif
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> n >> m;
-    for (int i = 1; i <= n; i++) {
-        std::cin >> target[i];
-        p[i] = lst[target[i]];
-        lst[target[i]] = i;
-    }
-    SegmentTree<int> tree(1, n, target);
-    UnlazySegmentTree<int, 0, Min> mi_tree(1, n, target);
-    for (int i = 1; i <= m; ++i) {
-        std::cin >> que[i].l >> que[i].r;
-        que[i].next = head[que[i].r];
-        head[que[i].r] = i;
-    }
-    for (int i = 1; i <= n; i++) {
-        bool flag = mi_tree.query(p[i] + 1, i - 1) < target[i];
-        tree.update((flag ? p[i] : 0) + 1, i, 1);
-        for (int j = head[i]; j; j = que[j].next) {
-            ans[j] = tree.query(que[j].l, que[j].l);
+    std::vector<long long> a(n+1);
+    for (auto it=a.begin()+1; it!=a.end(); it++) std::cin >> *it;
+    UnlazySegmentTree<long long> tree(1, n, a);
+    for (long long op, l, r, k; m; m--) {
+        std::cin >> op;
+        if (--op) {
+            std::cin >> l >> r;
+            std::cout << tree.query(l, r) << '\n';
+        } else {
+            std::cin >> l >> r >> k;
+            tree.update(l, r, k);
         }
     }
-    for (int i = 1; i <= m; i++) std::cout << ans[i] << '\n';
+    std::cout << std::flush;
 }
