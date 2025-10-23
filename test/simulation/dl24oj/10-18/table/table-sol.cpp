@@ -110,6 +110,7 @@ int main() {
     // 每次往后移动一个右端点
     for (int i = 1; i <= n; ++i) {
         // 求 [p[i]+1,i-1] 范围内是否有值 <a[i]
+        // FIXME: 疑似错误题解：未检查区间是否为空
         if (query_min(1, p[i] + 1, i - 1) < a[i])
             update(1, 1, i, 1);
         else

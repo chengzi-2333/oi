@@ -1,128 +1,81 @@
 #include <bits/stdc++.h>
 
 
-// T: element type, I: identity of the operation, F: operation
-template <typename T, T I = T(), typename F = std::plus<T>>
-class SegmentTree {
-private:
-    F operate;
-    T key = I, tag = I;
-    size_t l, r;
-    std::unique_ptr<SegmentTree> left, right;
+template <typename T, typename R = int>
+struct SegTree {
+    using tree_ptr = std::unique_ptr<SegTree>;
+    R l, r;
+    T key = 0, tag = 0, mi = INT_MAX;
+    tree_ptr left, right;
+    const int* arr;
 
-    template <typename R>
-    inline static R middle(const R& l, const R& r) {
-        return l + ((r - l) >> 1);
+    inline R middle() {
+        return (this->l + this->r) >> 1;
     }
 
-    inline size_t middle() const {
-        return middle(this->l, this->r); // std::midpoint(this->l, this->r)
+    inline tree_ptr& allocate(tree_ptr& ptr, R l, R r) {
+        return ptr ? ptr : ptr = std::make_unique<SegTree>(l, r, arr);
+    }
+
+    inline void allocate() {
+        auto mid = middle();
+        allocate(this->left, this->l, mid);
+        allocate(this->right, mid + 1, this->r);
+    }
+
+    inline bool contains(R l, R r) {
+        return this->l >= l && this->r <= r;
+    }
+
+    inline bool check(R l, R r) {
+        return l <= r && l <= this->r && r >= this->l;
+    }
+
+    inline void push_up() {
+        this->key = this->left->key + this->right->key;
+        this->mi = std::min(this->left->mi, this->right->mi);
     }
 
     inline void modify(T k) {
-        this->key += k * static_cast<T>(this->r - this->l + 1);
+        this->key += k * (this->r - this->l + 1);
         this->tag += k;
     }
 
-    inline void push_up() {
-        this->key = operate(this->left->key, this->right->key);
-    }
-
     inline void push_down() {
-        if (this->tag != I) {
+        this->allocate();
+        if (this->tag) {
             this->left->modify(this->tag);
             this->right->modify(this->tag);
-            this->tag = I;
+            this->tag = 0;
         }
     }
 
-public:
-    SegmentTree(size_t l, size_t r, int* arr = nullptr): l(l), r(r) {
-        if (l != r) {
-            auto mid = middle();
-            this->left = std::make_unique<SegmentTree>(l, mid, arr);
-            this->right = std::make_unique<SegmentTree>(mid + 1, r, arr);
-            this->push_up();
-        } else if (arr) this->key = arr[l];
+    SegTree(R l, R r, const int* arr): l(l), r(r), arr(arr) {
+        if (l == r) this->key = arr[l];
     }
 
-    void update(size_t l, size_t r, T k) {
-        if (this->l >= l && this->r <= r) {
-            this->modify(k);
-            return;
-        }
+    void update(R l, R r, T k) {
+        if (!this->check(l, r)) return;
+        if (this->contains(l, r)) return this->modify(k);
         this->push_down();
-        auto mid = middle();
-        if (l <= mid) this->left->update(l, r, k);
-        if (r > mid) this->right->update(l, r, k);
+        this->left->update(l, r, k), this->right->update(l, r, k);
         this->push_up();
     }
 
-    T query(size_t l, size_t r) {
-        if (l > r) return I;
-        if (this->l >= l && this->r <= r) return this->key;
+    T query(R p) {
+        // if (!this->check(l, r)) return 0;
+        // if (this->contains(l, r)) return this->key;
+        if (this->l == this->r) return this->key;
         this->push_down();
-        auto mid = middle();
-        T res = I;
-        if (l <= mid) res = operate(res, this->left->query(l, r));
-        if (r > mid) res = operate(res, this->right->query(l, r));
-        return res;
-    }
-};
-
-// T: element type, I: identity of the operation, F: operation
-template <typename T, T I = T(), typename F = std::plus<T>>
-class UnlazySegmentTree {  // TODO: fix
-private:
-    F operate;
-    T key = I;
-    size_t l, r;
-    std::unique_ptr<UnlazySegmentTree> left, right;
-
-    template <typename R>
-    inline static R middle(const R& l, const R& r) {
-        return l + ((r - l) >> 1);
+        return p <= middle() ? this->left->query(p) : this->right->query(p);
+        // return this->left->query(l, r) + this->right->query(l, r);
     }
 
-    inline size_t middle() const {
-        return middle(this->l, this->r); // std::midpoint(this->l, this->r)
-    }
-
-    inline void push_up() {
-        this->key = operate(this->left->key, this->right->key);
-    }
-
-public:
-    UnlazySegmentTree(size_t l, size_t r, int* arr = nullptr): l(l), r(r) {
-        if (l != r) {
-            auto mid = middle();
-            this->left = std::make_unique<UnlazySegmentTree>(l, mid, arr);
-            this->right = std::make_unique<UnlazySegmentTree>(mid + 1, r, arr);
-            this->push_up();
-        } else if (arr) this->key = arr[l];
-    }
-
-    void update(size_t l, size_t r, T k) {
-        auto mid = middle();
-        if (l <= mid) this->left->update(l, r, k);
-        if (r > mid) this->right->update(l, r, k);
-        this->push_up();
-    }
-
-    T query(size_t l, size_t r) {
-        if (l > r) return I;
-        if (this->l >= l && this->r <= r) return this->key;
-        auto mid = middle();
-        T res = I;
-        if (l <= mid) res = operate(res, this->left->query(l, r));
-        if (r > mid) res = operate(res, this->right->query(l, r));
-        return res;
-    }
-};
-
-struct Min {
-    int operator ()(int a, int b) const {
-        return std::min(a, b);
+    T query_min(R l, R r) {
+        if (!this->check(l, r)) return INT_MAX;
+        if (this->contains(l, r)) return this->mi;
+        // this->push_down();  // There's no need to push down.
+        return std::min(this->left->query_min(l, r), this->right->query_min(l, r));
     }
 };
 
@@ -146,18 +99,18 @@ int main() {
         p[i] = lst[target[i]];
         lst[target[i]] = i;
     }
-    SegmentTree<int> tree(1, n, target);
-    UnlazySegmentTree<int, 0, Min> mi_tree(1, n, target);
     for (int i = 1; i <= m; ++i) {
         std::cin >> que[i].l >> que[i].r;
         que[i].next = head[que[i].r];
         head[que[i].r] = i;
     }
+    SegTree<int> tree(1, n, target);
     for (int i = 1; i <= n; i++) {
-        bool flag = mi_tree.query(p[i] + 1, i - 1) < target[i];
-        tree.update((flag ? p[i] : 0) + 1, i, 1);
+        // FIXME: 疑似错误题解：未检查区间是否为空
+        bool flag = tree.query_min(p[i] + 1, i - 1) < target[i];
+        tree.update((flag ? 0 : p[i]) + 1, i, 1);
         for (int j = head[i]; j; j = que[j].next) {
-            ans[j] = tree.query(que[j].l, que[j].l);
+            ans[j] = tree.query(que[j].l);
         }
     }
     for (int i = 1; i <= m; i++) std::cout << ans[i] << '\n';
