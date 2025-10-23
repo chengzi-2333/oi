@@ -20,7 +20,7 @@ struct SegTree {
         return middle(this->l, this->r);
     }
 
-    bool compare(int l, int r) {
+    bool contains(int l, int r) {
         return this->l >= l && this->r <= r;
     }
 
@@ -62,7 +62,7 @@ struct SegTree {
     }
 
     void update_mul(int l, int r, T k) {
-        if (compare(l, r)) return this->modify_mul(k);
+        if (contains(l, r)) return this->modify_mul(k);
         this->push_down();
         auto mid = middle();
         if (l <= mid) this->left->update_mul(l, r, k);
@@ -71,7 +71,7 @@ struct SegTree {
     }
 
     void update_add(int l, int r, T k) {
-        if (compare(l, r)) return this->modify_add(k);
+        if (contains(l, r)) return this->modify_add(k);
         this->push_down();
         auto mid = middle();
         if (l <= mid) this->left->update_add(l, r, k);
@@ -81,7 +81,7 @@ struct SegTree {
 
     T query(int l, int r) {
         if (l > r) return 0;
-        if (compare(l, r)) return this->key;
+        if (contains(l, r)) return this->key;
         this->push_down();
         auto mid = middle();
         T res = 0;

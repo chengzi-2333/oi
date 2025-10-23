@@ -3,25 +3,47 @@
 #include <memory>
 #include <vector>
 
-// T: element type, I: identity of the operation, F: operation
-template <typename T, T I = T(), typename F = std::plus<T>>
+// T: element type, I: identity of the operation, F: operation, R: range type
+template <typename T, T I = T(), typename F = std::plus<T>, typename R = size_t>
 class SegmentTree {
+    using tree_ptr = std::unique_ptr<SegmentTree>;
+
 protected:
     F operate;
     T key = I, tag = I;
-    size_t l, r;
-    std::unique_ptr<SegmentTree> left, right;
+    R l, r;
+    tree_ptr left, right;
+    const std::vector<T>& arr;
 
-    template <typename R>
-    inline static R middle(const R& l, const R& r) {
+    template <typename L>
+    inline static L middle(const L& l, const L& r) {
         return l + ((r - l) >> 1);
     }
 
-    inline size_t middle() const {
+    inline R middle() const {
         return middle(this->l, this->r); // std::midpoint(this->l, this->r)
     }
 
-    inline void modify(T k) {  // TODO: need to generalize
+    inline bool contains(R l, R r) {
+        return this->l >= l && this->r <= r;
+    }
+
+    inline bool check(R l, R r) {
+        return l <= r && l <= this->r && r >= this->l;
+    }
+
+    inline tree_ptr& allocate(tree_ptr& ptr, R l, R r) {
+        if (ptr == nullptr) ptr = std::make_unique<SegmentTree>(l, r, this->arr);
+        return ptr;
+    }
+
+    inline void allocate() {
+        auto mid = middle();
+        allocate(this->left, this->l, mid);
+        allocate(this->right, mid + 1, this->r);
+    }
+
+    inline void modify(T k) {  // TODO: need to be generalized
         this->key = operate(this->key, k * static_cast<T>(this->r - this->l + 1));
         this->tag = operate(this->tag, k);
     }
@@ -31,6 +53,7 @@ protected:
     }
 
     inline void push_down() {
+        this->allocate();
         if (this->tag != I) {
             this->left->modify(this->tag);
             this->right->modify(this->tag);
@@ -39,36 +62,28 @@ protected:
     }
 
 public:
-    SegmentTree(size_t l, size_t r, const std::vector<T>& arr = {}): l(l), r(r) {
-        if (l != r) {
-            auto mid = middle();
-            this->left = std::make_unique<SegmentTree>(l, mid, arr);
-            this->right = std::make_unique<SegmentTree>(mid + 1, r, arr);
+    SegmentTree(R l, R r, const std::vector<T>& arr = {}, bool dynamic = false): l(l), r(r), arr(arr) {
+        if (l != r && !dynamic) {
+            this->allocate();
             this->push_up();
-        } else if (l < arr.size()) this->key = arr[l];
+        } else if (l < arr.size()) {
+            this->key = arr[l];
+        }
     }
 
-    void update(size_t l, size_t r, T k) {
-        if (this->l >= l && this->r <= r) {
-            this->modify(k);
-            return;
-        }
+    void update(R l, R r, T k) {
+        if (!this->check(l, r)) return;
+        if (this->contains(l, r)) return this->modify(k);
         this->push_down();
-        auto mid = middle();
-        if (l <= mid) this->left->update(l, r, k);
-        if (r > mid) this->right->update(l, r, k);
+        this->left->update(l, r, k), this->right->update(l, r, k);
         this->push_up();
     }
 
-    T query(size_t l, size_t r) {
-        if (l > r) return I;
-        if (this->l >= l && this->r <= r) return this->key;
+    T query(R l, R r) {
+        if (!this->check(l, r)) return I;
+        if (this->contains(l, r)) return this->key;
         this->push_down();
-        auto mid = middle();
-        T res = I;
-        if (l <= mid) res = operate(res, this->left->query(l, r));
-        if (r > mid) res = operate(res, this->right->query(l, r));
-        return res;
+        return operate(this->left->query(l, r), this->right->query(l, r));
     }
 };
 
@@ -83,14 +98,12 @@ signed main() {
     std::cin >> n >> m;
     std::vector<long long> a(n+1);
     for (auto it=a.begin()+1; it!=a.end(); it++) std::cin >> *it;
-    SegmentTree<long long> tree(1, n, a);
+    SegmentTree<long long> tree(1, n, a, true);
     for (long long op, l, r, k; m; m--) {
-        std::cin >> op;
-        if (--op) {
-            std::cin >> l >> r;
-            std::cout << tree.query(l, r) << '\n';
-        } else {
-            std::cin >> l >> r >> k;
+        std::cin >> op >> l >> r;
+        if (--op) std::cout << tree.query(l, r) << '\n';
+        else {
+            std::cin >> k;
             tree.update(l, r, k);
         }
     }
