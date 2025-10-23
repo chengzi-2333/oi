@@ -6,7 +6,7 @@
 // T: element type, I: identity of the operation, F: operation
 template <typename T, T I = T(), typename F = std::plus<T>>
 class SegmentTree {
-private:
+protected:
     F operate;
     T key = I, tag = I;
     size_t l, r;
@@ -21,9 +21,9 @@ private:
         return middle(this->l, this->r); // std::midpoint(this->l, this->r)
     }
 
-    inline void modify(T k) {
-        this->key += k * static_cast<T>(this->r - this->l + 1);
-        this->tag += k;
+    inline void modify(T k) {  // TODO: need to generalize
+        this->key = operate(this->key, k * static_cast<T>(this->r - this->l + 1));
+        this->tag = operate(this->tag, k);
     }
 
     inline void push_up() {
@@ -45,7 +45,7 @@ public:
             this->left = std::make_unique<SegmentTree>(l, mid, arr);
             this->right = std::make_unique<SegmentTree>(mid + 1, r, arr);
             this->push_up();
-        } else if (!arr.empty()) this->key = arr[l];
+        } else if (l < arr.size()) this->key = arr[l];
     }
 
     void update(size_t l, size_t r, T k) {
@@ -72,56 +72,6 @@ public:
     }
 };
 
-// T: element type, I: identity of the operation, F: operation
-template <typename T, T I = T(), typename F = std::plus<T>>
-class UnlazySegmentTree {  // TODO: fix
-private:
-    F operate;
-    T key = I;
-    size_t l, r;
-    std::unique_ptr<UnlazySegmentTree> left, right;
-
-    template <typename R>
-    inline static R middle(const R& l, const R& r) {
-        return l + ((r - l) >> 1);
-    }
-
-    inline size_t middle() const {
-        return middle(this->l, this->r); // std::midpoint(this->l, this->r)
-    }
-
-    inline void push_up() {
-        this->key = operate(this->left->key, this->right->key);
-    }
-
-public:
-    UnlazySegmentTree(size_t l, size_t r, const std::vector<T>& arr = {}): l(l), r(r) {
-        if (l != r) {
-            auto mid = middle();
-            this->left = std::make_unique<UnlazySegmentTree>(l, mid, arr);
-            this->right = std::make_unique<UnlazySegmentTree>(mid + 1, r, arr);
-            this->push_up();
-        } else if (!arr.empty()) this->key = arr[l];
-    }
-
-    void update(size_t l, size_t r, T k) {
-        auto mid = middle();
-        if (l <= mid) this->left->update(l, r, k);
-        if (r > mid) this->right->update(l, r, k);
-        this->push_up();
-    }
-
-    T query(size_t l, size_t r) {
-        if (l > r) return I;
-        if (this->l >= l && this->r <= r) return this->key;
-        auto mid = middle();
-        T res = I;
-        if (l <= mid) res = operate(res, this->left->query(l, r));
-        if (r > mid) res = operate(res, this->right->query(l, r));
-        return res;
-    }
-};
-
 
 long long n, m;
 
@@ -133,7 +83,7 @@ signed main() {
     std::cin >> n >> m;
     std::vector<long long> a(n+1);
     for (auto it=a.begin()+1; it!=a.end(); it++) std::cin >> *it;
-    UnlazySegmentTree<long long> tree(1, n, a);
+    SegmentTree<long long> tree(1, n, a);
     for (long long op, l, r, k; m; m--) {
         std::cin >> op;
         if (--op) {
