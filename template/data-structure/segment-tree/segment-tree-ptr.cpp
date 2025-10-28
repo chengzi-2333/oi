@@ -8,7 +8,7 @@ template <typename T, T I = T(), typename F = std::plus<T>, typename R = size_t>
 class SegmentTree {
     using tree_ptr = std::unique_ptr<SegmentTree>;
 
-protected:
+   protected:
     F operate;
     T key = I, tag = I;
     R l, r;
@@ -21,30 +21,30 @@ protected:
     }
 
     inline R middle() const {
-        return middle(this->l, this->r); // std::midpoint(this->l, this->r)
+        return middle(this->l, this->r);  // std::midpoint(this->l, this->r)
     }
 
-    inline bool contains(R l, R r) {
-        return this->l >= l && this->r <= r;
-    }
+    inline bool contains(R l, R r) { return this->l >= l && this->r <= r; }
 
     inline bool check(R l, R r) {
         return l <= r && l <= this->r && r >= this->l;
     }
 
     inline tree_ptr& allocate(tree_ptr& ptr, R l, R r) {
-        if (ptr == nullptr) ptr = std::make_unique<SegmentTree>(l, r, this->arr);
+        if (ptr == nullptr)  // TODO: initialize when dynamically build tree
+            ptr = std::make_unique<SegmentTree>(l, r, this->arr);
         return ptr;
     }
 
     inline void allocate() {
         auto mid = middle();
-        allocate(this->left, this->l, mid);
-        allocate(this->right, mid + 1, this->r);
+        this->allocate(this->left, this->l, mid);
+        this->allocate(this->right, mid + 1, this->r);
     }
 
     inline void modify(T k) {  // TODO: need to be generalized
-        this->key = operate(this->key, k * static_cast<T>(this->r - this->l + 1));
+        this->key =
+            operate(this->key, k * static_cast<T>(this->r - this->l + 1));
         this->tag = operate(this->tag, k);
     }
 
@@ -61,8 +61,9 @@ protected:
         }
     }
 
-public:
-    SegmentTree(R l, R r, const std::vector<T>& arr = {}, bool dynamic = false): l(l), r(r), arr(arr) {
+   public:
+    SegmentTree(R l, R r, const std::vector<T>& arr = {}, bool dynamic = false)
+        : l(l), r(r), arr(arr) {
         if (l != r && !dynamic) {
             this->allocate();
             this->push_up();
@@ -87,7 +88,6 @@ public:
     }
 };
 
-
 long long n, m;
 
 signed main() {
@@ -96,12 +96,13 @@ signed main() {
 #endif
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> n >> m;
-    std::vector<long long> a(n+1);
-    for (auto it=a.begin()+1; it!=a.end(); it++) std::cin >> *it;
+    std::vector<long long> a(n + 1);
+    for (auto it = a.begin() + 1; it != a.end(); it++) std::cin >> *it;
     SegmentTree<long long> tree(1, n, a, true);
     for (long long op, l, r, k; m; m--) {
         std::cin >> op >> l >> r;
-        if (--op) std::cout << tree.query(l, r) << '\n';
+        if (--op)
+            std::cout << tree.query(l, r) << '\n';
         else {
             std::cin >> k;
             tree.update(l, r, k);
