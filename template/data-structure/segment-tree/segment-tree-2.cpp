@@ -35,7 +35,7 @@ struct SegTree {
         this->mul = (this->mul * k) % m;
     }
 
-    void modify(T add, T mul) {
+    void update(T add, T mul) {
         this->key = (this->key * mul + add * (this->r - this->l + 1)) % m;
         this->add = (this->add * mul + add) % m;
         this->mul = (this->mul * mul) % m;
@@ -46,8 +46,8 @@ struct SegTree {
     }
 
     void push_down() {
-        this->left->modify(this->add, this->mul);
-        this->right->modify(this->add, this->mul);
+        this->left->update(this->add, this->mul);
+        this->right->update(this->add, this->mul);
         this->add = 0;
         this->mul = 1;
     }

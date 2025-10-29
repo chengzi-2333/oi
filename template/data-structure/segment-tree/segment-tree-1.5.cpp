@@ -27,7 +27,7 @@ struct SegTree {
         return l <= r && l <= this->r && r >= this->l;
     }
     
-    inline void modify(T k) {
+    inline void update(T k) {
         this->key += k * static_cast<T>(this->r - this->l + 1);
         this->tag += k;
     }
@@ -39,8 +39,8 @@ struct SegTree {
     inline void push_down() {
         this->allocate();
         if (this->tag) {
-            this->left->modify(this->tag);
-            this->right->modify(this->tag);
+            this->left->update(this->tag);
+            this->right->update(this->tag);
             this->tag = 0;
         }
     }
@@ -61,7 +61,7 @@ struct SegTree {
     
     void update(R l, R r, T k) {
         if (!check(l, r)) return;
-        if (this->contains(l, r)) return this->modify(k);
+        if (this->contains(l, r)) return this->update(k);
         this->push_down();
         this->left->update(l, r, k), this->right->update(l, r, k);
         this->push_up();

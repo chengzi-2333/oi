@@ -31,7 +31,7 @@ class SegmentTree {
     }
 
     inline tree_ptr& allocate(tree_ptr& ptr, R l, R r) {
-        if (ptr == nullptr)  // TODO: initialize when dynamically build tree
+        if (ptr == nullptr)
             ptr = std::make_unique<SegmentTree>(l, r, this->arr);
         return ptr;
     }
@@ -42,10 +42,15 @@ class SegmentTree {
         this->allocate(this->right, mid + 1, this->r);
     }
 
-    inline void modify(T k) {  // TODO: need to be generalized
+    inline void update(T k) {
         this->key =
             operate(this->key, k * static_cast<T>(this->r - this->l + 1));
         this->tag = operate(this->tag, k);
+    }
+
+    inline void assign(T k) {
+        this->key = k * (this->r - this->l + 1);
+        this->tag = k;
     }
 
     inline void push_up() {
@@ -55,8 +60,8 @@ class SegmentTree {
     inline void push_down() {
         this->allocate();
         if (this->tag != I) {
-            this->left->modify(this->tag);
-            this->right->modify(this->tag);
+            this->left->update(this->tag);
+            this->right->update(this->tag);
             this->tag = I;
         }
     }
@@ -74,7 +79,7 @@ class SegmentTree {
 
     void update(R l, R r, T k) {
         if (!this->check(l, r)) return;
-        if (this->contains(l, r)) return this->modify(k);
+        if (this->contains(l, r)) return this->update(k);
         this->push_down();
         this->left->update(l, r, k), this->right->update(l, r, k);
         this->push_up();
@@ -86,6 +91,14 @@ class SegmentTree {
         this->push_down();
         return operate(this->left->query(l, r), this->right->query(l, r));
     }
+
+    void assign(R l, R r, T k) {
+        if (!this->check(l, r)) return;
+        if (this->contains(l, r)) return this->assign(k);
+        this->push_down(true);
+        this->left->assign(l, r, k), this->right->assign(l, r, k);
+        this->push_up();
+    }
 };
 
 long long n, m;
@@ -93,7 +106,7 @@ long long n, m;
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("segment-tree.in", "r", stdin);
-#endif
+#endif  // ONLINE_JUDGE
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> n >> m;
     std::vector<long long> a(n + 1);

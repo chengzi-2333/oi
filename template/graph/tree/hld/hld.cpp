@@ -60,7 +60,7 @@ struct SegmentTree {
         this->allocate(this->right, mid + 1, this->r);
     }
 
-    void modify(int k) {
+    void update(int k) {
         this->key += k * (this->r - this->l + 1);
         this->tag += k;
     }
@@ -70,8 +70,8 @@ struct SegmentTree {
     void push_down() {
         // this->allocate();
         if (this->tag) {
-            this->left->modify(this->tag);
-            this->right->modify(this->tag);
+            this->left->update(this->tag);
+            this->right->update(this->tag);
             this->tag = 0;
         }
     }
@@ -83,7 +83,7 @@ struct SegmentTree {
 
     void update(int l, int r, int k) {
         if (!this->check(l, r)) return;
-        if (this->contains(l, r)) return this->modify(k);
+        if (this->contains(l, r)) return this->update(k);
         this->push_down();
         this->left->update(l, r, k), this->right->update(l, r, k);
         this->push_up();
