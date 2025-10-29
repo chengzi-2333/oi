@@ -2,7 +2,7 @@
 #include <bits/stdc++.h>
 
 int n, t;
-std::vector<int> fa, sz, dep, hson, top, dfn, rnk;
+std::vector<int> fa, sz, dep, hson, top, dfn;
 std::vector<std::vector<int>> g;
 
 void build_tree(int u) {
@@ -18,7 +18,6 @@ void build_tree(int u) {
 void cut_tree(int u, int ftop) {
     top[u] = ftop;
     dfn[u] = ++t;
-    rnk[t] = u;
     if (hson[u]) cut_tree(hson[u], ftop);
     for (const auto& v : g[u]) {
         if (v != hson[u] && v != fa[u]) cut_tree(v, v);
@@ -29,7 +28,7 @@ struct SegmentTree {
     using tree_ptr = std::unique_ptr<SegmentTree>;
 
     int l, r;
-    int key = 0, tag = 0;
+    int key = 0, tag = -1;
     tree_ptr left = nullptr, right = nullptr;
 
     inline static int middle(int l, int r) { return l + ((r - l) >> 1); }
@@ -48,27 +47,17 @@ struct SegmentTree {
 
     inline void push_up() { this->key = (this->left->key + this->right->key); }
 
-    inline void update(int k) {
-        this->key += k * (this->r - this->l + 1);
-        this->tag += k;
-    }
-
     inline void assign(int k) {
         this->key = k * (this->r - this->l + 1);
         this->tag = k;
     }
 
-    inline void push_down(bool is_assign = false) {
+    inline void push_down() {
         this->allocate();
-        if (this->tag) {
-            if (is_assign) {
-                this->left->assign(this->tag);
-                this->right->assign(this->tag);
-            } else {
-                this->left->update(this->tag);
-                this->right->update(this->tag);
-            }
-            this->tag = 0;
+        if (this->tag != -1) {
+            this->left->assign(this->tag);
+            this->right->assign(this->tag);
+            this->tag = -1;
         }
     }
 
@@ -80,14 +69,6 @@ struct SegmentTree {
 
     SegmentTree(int l, int r) : l(l), r(r) {}
 
-    void update(int l, int r, int k) {
-        if (!this->check(l, r)) return;
-        if (this->contains(l, r)) return this->update(k);
-        this->push_down();
-        this->left->update(l, r, k), this->right->update(l, r, k);
-        this->push_up();
-    }
-
     int query(int l, int r) {
         if (!this->check(l, r)) return 0;
         if (this->contains(l, r)) return this->key;
@@ -98,7 +79,7 @@ struct SegmentTree {
     void assign(int l, int r, int k) {
         if (!this->check(l, r)) return;
         if (this->contains(l, r)) return this->assign(k);
-        this->push_down(true);
+        this->push_down();
         this->left->assign(l, r, k), this->right->assign(l, r, k);
         this->push_up();
     }
@@ -106,18 +87,20 @@ struct SegmentTree {
 
 std::unique_ptr<SegmentTree> tree;
 
-int install(int u) {  // TODO
-    auto p = u, s = 0;
-    while (!(s = tree->query(dfn[top[p]], dfn[p])) && fa[top[p]]) p = fa[top[p]];
-    p = rnk[dfn[top[p]] + s];
-    tree->assign(dfn[p], dfn[u], 1);
-    return dep[u] - dep[p] + 1;
+inline int install(int u) {
+    auto s = tree->key;
+    while (top[u] != 1) {
+        tree->assign(dfn[top[u]], dfn[u], 1);
+        u = fa[top[u]];
+    }
+    tree->assign(dfn[1], dfn[u], 1);
+    return tree->key - s;
 }
 
-int uninstall(int u) {  // TODO
-    auto s = tree->query(dfn[u], dfn[u] + sz[u] - 1);
+inline int uninstall(int u) {
+    auto s = tree->key;
     tree->assign(dfn[u], dfn[u] + sz[u] - 1, 0);
-    return s;
+    return s - tree->key;
 }
 
 signed main() {
@@ -130,12 +113,12 @@ signed main() {
     g.resize(n + 1);
     fa.resize(n + 1), sz.resize(n + 1);
     dep.resize(n + 1), hson.resize(n + 1);
-    top.resize(n + 1), dfn.resize(n + 1), rnk.resize(n + 1);
+    top.resize(n + 1), dfn.resize(n + 1);
     for (int i = 2; i <= n; i++) {
         std::cin >> fa[i];
         g[++fa[i]].push_back(i);
     }
-    
+
     build_tree(1), cut_tree(1, 1);
     tree = std::make_unique<SegmentTree>(1, n);
 
