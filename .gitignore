@@ -5,6 +5,7 @@
 # source code
 !*.cpp
 !*.hpp
+!*.py
 
 # input/answer file
 !*.in
