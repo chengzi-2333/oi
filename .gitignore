@@ -15,5 +15,6 @@
 !*.md
 !*.sh
 !requirements.txt
+!config-template.yml
 
 .vscode/

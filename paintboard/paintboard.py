@@ -582,7 +582,7 @@ async def main():
     使用任务队列处理多账号绘图
     """
     try:
-        with open("paintboard.yml", "r", encoding="utf-8") as file:
+        with open("config.yml", "r", encoding="utf-8") as file:
             config = yaml.load(file, yaml.Loader)
     except FileNotFoundError as e:
         logger.error("找不到配置文件：%s", e.filename)

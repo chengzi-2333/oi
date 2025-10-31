@@ -1,0 +1,7 @@
+settings:
+  pic: test.png  # put your image path here
+  pos: [100, 100]  # the start point where image is painted
+  size: [100, 50]  # target size of image
+
+accounts:
+  - [123456, TestKey]  # [uid, access_key]
