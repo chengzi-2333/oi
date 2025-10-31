@@ -7,6 +7,7 @@ import uuid
 import logging
 import asyncio
 import struct
+import collections
 from typing import Optional, Tuple, List, Dict
 
 import yaml
@@ -18,6 +19,7 @@ from websockets.protocol import State
 
 
 def get_logger(level=logging.INFO):
+    """生成带颜色的日志输出"""
     # 创建logger对象
     logger = logging.getLogger()
     logger.setLevel(level)
@@ -28,13 +30,6 @@ def get_logger(level=logging.INFO):
     color_formatter = colorlog.ColoredFormatter(
         fmt="%(log_color)s[%(levelname)s][%(asctime)s] %(message)s",
         datefmt="%a %d %b %Y %H:%M:%S",
-        log_colors={
-            "DEBUG": "cyan",
-            "INFO": "green",
-            "WARNING": "yellow",
-            "ERROR": "red",
-            "CRITICAL": "red,bg_white",
-        },
     )
     # 将颜色输出格式添加到控制台日志处理器
     console_handler.setFormatter(color_formatter)
@@ -72,7 +67,7 @@ PAINT_STATUS = {
 }
 
 # 全局限制（根据 README 调整）
-MAX_CONNECTIONS = 7
+MAX_CONNECTIONS = 2
 MAX_PACKETS_PER_SECOND_PER_CONNECTION = 128  # 每连接每秒最多128个包
 SEND_INTERVAL = 1.0 / MAX_PACKETS_PER_SECOND_PER_CONNECTION
 
@@ -130,54 +125,55 @@ def get_paint_token(uid: int, access_key: str) -> Optional[str]:
 
 
 # -------------------------- 图像处理（支持自定义尺寸） --------------------------
-def read_image_original_size(
-    image_path: str,
-) -> Tuple[Optional[List[List[Dict]]], bool]:
+def read_image(
+    image_path: str, target_size: Tuple[int, int]
+) -> Optional[List[List[Dict]]]:
     """
     读取图片并保持原始尺寸，返回像素数据
     :param image_path: 图片路径
-    :return: (像素数据, 是否成功)，像素数据格式：[height][width] 二维列表，每个元素为{r, g, b}
+    :return: 像素数据
+    像素数据格式：[height][width] 二维列表，每个元素为{r, g, b}
     """
     try:
         with Image.open(image_path) as img:
-            # 获取原始尺寸
-            original_width, original_height = img.size
-            logger.info("图片原始尺寸: %sx%s", original_width, original_height)
+            # 获取图片尺寸
+            logger.info(
+                "图片原始尺寸: (%s, %s)，目标尺寸：(%s, %s)", *img.size, *target_size
+            )
+            width, height = target_size
 
             # 校验尺寸是否符合画板最大限制（1000x600）
-            if not (0 < original_width <= 1000 and 0 < original_height <= 600):
+            if not (0 < width <= 1000 and 0 < height <= 600):
                 logger.warning(
-                    "图片尺寸(%sx%s)超出画板限制（最大1000x600）",
-                    original_width,
-                    original_height,
+                    "图片尺寸(%s, %s)超出画板限制（最大1000x600）", *target_size
                 )
-                return None, False
+                return None
 
             # 转换为RGB模式（去除Alpha透明通道，避免像素颜色异常）
-            img_rgb = img.convert("RGB")
+            img_resize = img.resize(target_size)
+            img_rgb = img_resize.convert("RGB")
 
             # 按原始尺寸读取像素数据（逐行逐列，确保数据完整性）
             pixels = []
-            for y in range(original_height):
+            for y in range(height):
                 row = []
-                for x in range(original_width):
+                for x in range(width):
                     r, g, b = img_rgb.getpixel((x, y))
                     row.append({"r": r, "g": g, "b": b})
                 pixels.append(row)
 
             logger.info(
-                "成功读取图片：尺寸%sx%s，总像素%s个",
-                original_width,
-                original_height,
-                original_width * original_height,
+                "成功读取图片：尺寸(%s, %s)，总像素%s个",
+                *target_size,
+                width * height,
             )
-            return pixels, True
+            return pixels
     except FileNotFoundError:
         logger.error("图片文件未找到：%s", image_path)
-        return None, False
+        return None
     except Exception as e:
         logger.error("读取图片时出错: %s", e)
-        return None, False
+        return None
 
 
 def chunk_image(pixels: List[List[Dict]], chunk_num: int) -> List[List[List[Dict]]]:
@@ -198,7 +194,7 @@ def chunk_image(pixels: List[List[Dict]], chunk_num: int) -> List[List[List[Dict
 
     for i in range(chunk_num):
         # 前remainder个块会多分配一行
-        rows_in_this_chunk = base_rows_per_chunk + (1 if i < remainder else 0)
+        rows_in_this_chunk = base_rows_per_chunk + int(i < remainder)
         end_row = start_row + rows_in_this_chunk
 
         # 提取当前块的像素数据
@@ -211,22 +207,8 @@ def chunk_image(pixels: List[List[Dict]], chunk_num: int) -> List[List[List[Dict
 
 
 # -------------------------- 任务定义 --------------------------
-class PaintTask:
-    def __init__(self, x: int, y: int, r: int, g: int, b: int):
-        self.x = x
-        self.y = y
-        self.r = r
-        self.g = g
-        self.b = b
-
-
-class MaintainTask:
-    def __init__(self, x: int, y: int, r: int, g: int, b: int):
-        self.x = x
-        self.y = y
-        self.r = r
-        self.g = g
-        self.b = b
+PaintTask = collections.namedtuple("PaintTask", ["x", "y", "r", "g", "b"])
+MaintainTask = collections.namedtuple("MaintainTask", ["x", "y", "r", "g", "b"])
 
 
 # -------------------------- WebSocket客户端 --------------------------
@@ -235,7 +217,7 @@ class PaintboardClient:
         self.access_key = access_key
         self.uid = uid
         self.token = token
-        self.ws: Optional[websockets.ClientConnection] = None
+        self.ws: Optional[websockets.asyncio.client.ClientConnection] = None
         self.paint_id = 0  # 绘画识别码（自增，确保唯一性）
         self.paint_queue = bytearray()  # 绘画包队列（处理粘包）
         self.connected = False  # 连接状态标记
@@ -285,7 +267,7 @@ class PaintboardClient:
                                     len(self.paint_queue),
                                     sent_packets,
                                 )
-                                self.paint_queue = bytearray()  # 发送后清空队列
+                                self.paint_queue.clear()  # 发送后清空队列
                                 self.last_send_time = time.time()
                     else:
                         # 数据包太少，等待积累更多数据
@@ -335,7 +317,7 @@ class PaintboardClient:
                 offset += 5
                 status_msg = PAINT_STATUS.get(status, f"未知状态码{status}")
                 logger.info(
-                    "AccessKey: %s; 绘画结果 [ID:%s]: %s",
+                    "绘画结果[AccessKey: %s, ID: %s]: %s",
                     self.access_key,
                     paint_id,
                     status_msg,
@@ -382,7 +364,7 @@ class PaintboardClient:
 
         # 校验颜色值（0-255）
         if not (0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255):
-            logger.warning("颜色值(%s,%s,%s)无效，跳过", r, g, b)
+            logger.warning("颜色值(%s, %s, %s)无效，跳过", r, g, b)
             return None
 
         # 生成唯一绘画识别码
@@ -424,7 +406,7 @@ class PaintboardClient:
                     # 从任务队列获取绘制任务
                     task = await asyncio.wait_for(task_queue.get(), timeout=1.0)
                     if isinstance(task, PaintTask):
-                        await self.paint_pixel(task.x, task.y, task.r, task.g, task.b)
+                        await self.paint_pixel(*task)
                         # 短暂延时避免发送过快
                         await asyncio.sleep(0.01)
                     task_queue.task_done()
@@ -494,12 +476,8 @@ class PaintboardClient:
                                 ):
 
                                     logger.info(
-                                        "检测到像素被修改: (%s,%s): %s,%s,%s -> %s,%s,%s",
-                                        task.x,
-                                        task.y,
-                                        task.r,
-                                        task.g,
-                                        task.b,
+                                        "检测到像素被修改: (%s,%s): (%s, %s, %s) -> (%s, %s, %s)",
+                                        *task,
                                         expected_r,
                                         expected_g,
                                         expected_b,
@@ -553,7 +531,7 @@ async def populate_task_queue(
         or start_y + target_height > 600
     ):
         logger.warning(
-            "绘制范围超出画板！起始(%s,%s)+尺寸(%sx%s) > 1000x600",
+            "绘制范围超出画板！起始(%s, %s)+尺寸(%s, %s) > (1000, 600)",
             start_x,
             start_y,
             target_width,
@@ -562,7 +540,7 @@ async def populate_task_queue(
         return
 
     logger.info(
-        "开始填充任务队列：起始位置(%s,%s)，尺寸%sx%s",
+        "开始填充任务队列：起始位置(%s, %s)，尺寸(%s, %s)",
         start_x,
         start_y,
         target_width,
@@ -574,16 +552,9 @@ async def populate_task_queue(
     for y in range(target_height):
         for x in range(target_width):
             pixel = pixels[y][x]
-            if (
-                ignore_white
-                and pixel["r"] == 255
-                and pixel["g"] == 255
-                and pixel["b"] == 255
-            ):
+            if ignore_white and tuple(pixel.values()) == (255, 255, 255):
                 continue
-            await task_queue.put(
-                PaintTask(start_x + x, start_y + y, pixel["r"], pixel["g"], pixel["b"])
-            )
+            await task_queue.put(PaintTask(start_x + x, start_y + y, *pixel.values()))
             task_count += 1
 
     logger.info("任务队列填充完成，共添加 %s 个任务", task_count)
@@ -601,35 +572,35 @@ def create_pixels_map(
 
     for y in range(target_height):
         for x in range(target_width):
-            pixels_map[(start_x + x, start_y + y)] = (
-                pixels[y][x]["r"],
-                pixels[y][x]["g"],
-                pixels[y][x]["b"],
-            )
+            pixels_map[(start_x + x, start_y + y)] = tuple(pixels[y][x].values())
 
     return pixels_map
 
 
 async def main():
     """
-    Multi Key Mode with Task Queue
+    使用任务队列处理多账号绘图
     """
-    START_X, START_Y = 300, 340
-    # 1. 获取账号列表和token
+    try:
+        with open("paintboard.yml", "r", encoding="utf-8") as file:
+            config = yaml.load(file, yaml.Loader)
+    except FileNotFoundError as e:
+        logger.error("找不到配置文件：%s", e.filename)
+        return
 
-    with open("paintboard.yml", "r", encoding="utf-8") as f:
-        accounts = yaml.load(f, yaml.Loader)["accounts"]
-    accounts = [tuple(account.values()) for account in accounts]
-    tokens = [get_paint_token(*account) for account in accounts]
-    print(tokens)
-    for token in tokens:
-        if not token:
-            logger.error("获取Token失败，程序退出")
-            return
+    settings = config.get("settings")
+    accounts = config.get("accounts")
+
+    START_X, START_Y = settings.get("pos")
+    # 1. 获取账号列表和token
+    tokens = [get_paint_token(uid, key) for uid, key in accounts]
+    if not any(tokens):
+        logger.error("获取Token失败，程序退出")
+        return
 
     # 2. 读取图片
-    pixels, success = read_image_original_size("cpp23-cyberpunk.jpg")
-    if not success or not pixels:
+    pixels = read_image(settings.get("pic"), settings.get("size"))
+    if not pixels:
         logger.error("图片处理失败，程序退出")
         return
 
@@ -644,8 +615,7 @@ async def main():
     tasks = []
 
     # 创建工作客户端
-    for i, (uid, access_key) in enumerate(accounts):
-        token = tokens[i]
+    for token, (uid, access_key) in zip(tokens, accounts):
         client = PaintboardClient(uid, token, access_key)
         workers.append(client)
 
