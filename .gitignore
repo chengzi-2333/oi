@@ -5,6 +5,7 @@
 # source code
 !*.cpp
 !*.hpp
+!*.py
 
 # input/answer file
 !*.in
@@ -13,6 +14,7 @@
 # others
 !*.md
 !*.sh
-!*.json
+!requirements.txt
+!config-template.yml
 
 .vscode/

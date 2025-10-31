@@ -1,0 +1,5 @@
+pyyaml
+colorlog
+requests
+websockets
+pillow
