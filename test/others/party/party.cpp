@@ -31,6 +31,33 @@ std::vector<int> dijkstra(int s) {
     return dis;
 }
 
+// O(n * m)
+std::vector<int> spfa(int s) {
+    std::queue<int> que;
+    std::vector<bool> vis(g.size());
+    std::vector<int> dis(g.size(), INF), cnt(g.size());
+    que.push(s);
+    dis[s] = 0;
+    vis[s] = true;
+    while (!que.empty()) {
+        int u = que.front();
+        que.pop();
+        vis[u] = false;
+        for (const auto& [v, w] : g[u]) {
+            if (dis[v] > dis[u] + w) {
+                dis[v] = dis[u] + w;
+                cnt[v] = cnt[u] + 1;
+                if (cnt[v] >= g.size() - 1) return {};
+                if (!vis[v]) {
+                    que.push(v);
+                    vis[v] = true;
+                }
+            }
+        }
+    }
+    return dis;
+}
+
 // O(n * ((n + m) * log(n) + k)) == O(n * m * log(n))
 bool naive(int s) {
     if (shops[s]) return true;
@@ -42,13 +69,12 @@ bool naive(int s) {
     return false;
 }
 
-// O(/* TODO: better time complexity */)
+// O(k + 2 * n * m + n) == O(n * m)
 void solve() {
-    // TODO
     for (int k = 1; k <= n; k++) {
         if (shops[k]) g[k + n].emplace_back(k, -shops[k]);
     }
-    const auto dis2 = dijkstra(n * 2);
+    const auto dis2 = spfa(n * 2);
     for (int i = 1; i < n; i++) {
         std::cout << (dis1[i] >= dis2[i]) << '\n';
     }
@@ -61,13 +87,15 @@ signed main() {
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> n >> m >> k;
     bool use_naive = n * m * std::__lg(n) < 1e8;
-    g.resize(2 * (n + 1));
+    g.resize(use_naive ? n + 1 : 2 * (n + 1));
     for (int u, v, w; m; m--) {
         std::cin >> u >> v >> w;
         g[u].emplace_back(v, w);
         g[v].emplace_back(u, w);
-        g[u + n].emplace_back(v + n, w);
-        g[v + n].emplace_back(u + n, w);
+        if (!use_naive) {
+            g[u + n].emplace_back(v + n, w);
+            g[v + n].emplace_back(u + n, w);
+        }
     }
     shops.resize(n + 1);
     for (int u, v; k; k--) {
