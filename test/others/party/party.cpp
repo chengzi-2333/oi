@@ -12,8 +12,8 @@ std::vector<int> shops, dis1;
 // O((n + m) * log(n))
 std::vector<int> dijkstra(int s) {
     std::priority_queue<PII, std::vector<PII>, std::greater<PII>> h;
-    std::vector<int> dis(n + 1, INF);
-    std::vector<bool> vis(n + 1);
+    std::vector<int> dis(g.size(), INF);
+    std::vector<bool> vis(g.size());
     dis[s] = 0;
     h.emplace(dis[s], s);
     while (!h.empty()) {
@@ -45,6 +45,13 @@ bool naive(int s) {
 // O(/* TODO: better time complexity */)
 void solve() {
     // TODO
+    for (int k = 1; k <= n; k++) {
+        if (shops[k]) g[k + n].emplace_back(k, -shops[k]);
+    }
+    const auto dis2 = dijkstra(n * 2);
+    for (int i = 1; i < n; i++) {
+        std::cout << (dis1[i] >= dis2[i]) << '\n';
+    }
 }
 
 signed main() {
@@ -54,11 +61,13 @@ signed main() {
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> n >> m >> k;
     bool use_naive = n * m * std::__lg(n) < 1e8;
-    g.resize(n + 1);
+    g.resize(2 * (n + 1));
     for (int u, v, w; m; m--) {
         std::cin >> u >> v >> w;
         g[u].emplace_back(v, w);
         g[v].emplace_back(u, w);
+        g[u + n].emplace_back(v + n, w);
+        g[v + n].emplace_back(u + n, w);
     }
     shops.resize(n + 1);
     for (int u, v; k; k--) {
