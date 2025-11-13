@@ -32,20 +32,26 @@ struct vec2 {
         return {k * x, k * y};
     }
 
+    vec2 operator /(double k) const {
+        return {x / k, y / k};
+    }
+
     vec2 operator -() const {
         return {-x, -y};
     }
 
     bool operator <(const vec2& v) const {
-        return x < v.x && y < v.y;
+        return this->magnitude() < v.magnitude();
     }
 
-    vec2 operator =(const vec2& v) {
-        return {x = v.x, y = v.y};
+    vec2& operator =(const vec2& v) {
+        x = v.x, y = v.y;
+        return *this;
     }
 
-    vec2 operator +=(const vec2& v) {
-        return {x += v.x, y += v.y};
+    vec2& operator +=(const vec2& v) {
+        x += v.x, y += v.y;
+        return *this;
     }
 
     void print() const {
@@ -53,7 +59,7 @@ struct vec2 {
     }
 };
 
-constexpr double k = 0.999, T0 = 100000, Tk = 0.001;
+constexpr double k = 0.999, T0 = 10000, Tk = 0.001;
 std::random_device dev;
 std::mt19937 eng(dev());
 std::uniform_real_distribution<double> rng(0.0, 1.0);
@@ -61,6 +67,17 @@ std::uniform_real_distribution<double> rng(0.0, 1.0);
 int n;
 std::vector<std::pair<vec2, double>> forces;
 
+inline vec2 gen_average() {
+    double tot_weight = 0;
+    vec2 u;
+    for (const auto& [vec, weight] : forces) {
+        u += vec * weight;
+        tot_weight += weight;
+    }
+    return u / tot_weight;
+}
+
+// minimize this function (approach to 0)
 // \sum_{i=1}^{n} \frac{\vec{v_i} - \vec{r}}{|\vec{v_i} - \vec{r}|} w_i
 inline vec2 calculate(const vec2& r) {
     vec2 u;
@@ -71,23 +88,20 @@ inline vec2 calculate(const vec2& r) {
 }
 
 vec2 simulate_annealing(const vec2& init) {
-    auto t = T0;
-    vec2 ans(init), u(init);
+    double t = T0;
+    vec2 ans(init), u(init), v(init);
     while (t > Tk) {
-        auto v = u + vec2(t * (rng(eng) * 2 - 1), t * (rng(eng) * 2 - 1));
-        if (t < 10) std::cout << calculate(ans).magnitude() << std::endl;
-        auto cu = calculate(u), cv = calculate(v), cans = calculate(ans);
-        if (cu.magnitude() < cans.magnitude()) ans = u;
-        if (cv.magnitude() < cans.magnitude()) ans = v;
-        auto ds = (cv - cu).magnitude();
-        if (std::exp(-ds / t) > rng(eng)) u = v;
+        v = u + vec2(t * (rng(eng) * 2 - 1), t * (rng(eng) * 2 - 1));
+        auto fu = calculate(u), fv = calculate(v), fans = calculate(ans);
+        if (fv < fans) ans = v;
+        auto dE = fv - fu;
+        if (std::exp(-dE.magnitude() / t) > rng(eng)) u = v;
         t *= k;
     }
-    for (int i = 1; i <= 1000; i++) {
+    for (int i = T0; i; i--) {
         auto v = ans + vec2(t * (rng(eng) * 2 - 1), t * (rng(eng) * 2 - 1));
-        if (calculate(v).magnitude() < calculate(ans).magnitude()) ans = v;
+        if (calculate(v) < calculate(ans)) ans = v;
     }
-    std::cout << calculate(ans).magnitude() << std::endl;
     return ans;
 }
 
@@ -104,5 +118,5 @@ signed main() {
         auto& [x, y] = vec;
         std::cin >> x >> y >> weight;
     }
-    simulate_annealing(calculate({})).print();
+    simulate_annealing(gen_average()).print();
 }
