@@ -32,6 +32,10 @@ struct vec2 {
         return {k * x, k * y};
     }
 
+    vec2 operator -() const {
+        return {-x, -y};
+    }
+
     bool operator <(const vec2& v) const {
         return x < v.x && y < v.y;
     }
@@ -39,9 +43,17 @@ struct vec2 {
     vec2 operator =(const vec2& v) {
         return {x = v.x, y = v.y};
     }
+
+    vec2 operator +=(const vec2& v) {
+        return {x += v.x, y += v.y};
+    }
+
+    void print() const {
+        std::cout << x << ' ' << y << '\n';
+    }
 };
 
-constexpr double k = 0.999, T0 = 47, Tk = 1;
+constexpr double k = 0.999, T0 = 100000, Tk = 0.001;
 std::random_device dev;
 std::mt19937 eng(dev());
 std::uniform_real_distribution<double> rng(0.0, 1.0);
@@ -53,28 +65,29 @@ std::vector<std::pair<vec2, double>> forces;
 inline vec2 calculate(const vec2& r) {
     vec2 u;
     for (const auto& [vec, weight] : forces) {
-        u = u + (vec - r).normalize() * weight;
+        u += (vec - r).normalize() * weight;
     }
     return u;
 }
 
 vec2 simulate_annealing(const vec2& init) {
-    auto t = T0, pds = 9999999.;
+    auto t = T0;
     vec2 ans(init), u(init);
     while (t > Tk) {
         auto v = u + vec2(t * (rng(eng) * 2 - 1), t * (rng(eng) * 2 - 1));
-        auto dv = calculate(v) - calculate(u);
-        double ds = dv.magnitude();
-        if (pds > ds) pds = ds, ans = v;
-        if (std::exp(-dv.magnitude() / t) > rng(eng)) u = v;
+        if (t < 10) std::cout << calculate(ans).magnitude() << std::endl;
+        auto cu = calculate(u), cv = calculate(v), cans = calculate(ans);
+        if (cu.magnitude() < cans.magnitude()) ans = u;
+        if (cv.magnitude() < cans.magnitude()) ans = v;
+        auto ds = (cv - cu).magnitude();
+        if (std::exp(-ds / t) > rng(eng)) u = v;
         t *= k;
     }
     for (int i = 1; i <= 1000; i++) {
         auto v = ans + vec2(t * (rng(eng) * 2 - 1), t * (rng(eng) * 2 - 1));
-        auto dv = calculate(v) - calculate(u);
-        double ds = dv.magnitude();
-        if (pds > ds) pds = ds, ans = v;
+        if (calculate(v).magnitude() < calculate(ans).magnitude()) ans = v;
     }
+    std::cout << calculate(ans).magnitude() << std::endl;
     return ans;
 }
 
@@ -91,6 +104,5 @@ signed main() {
         auto& [x, y] = vec;
         std::cin >> x >> y >> weight;
     }
-    const auto [x, y] = simulate_annealing(calculate({}));
-    std::cout << x << ' ' << y << std::endl;
+    simulate_annealing(calculate({})).print();
 }
