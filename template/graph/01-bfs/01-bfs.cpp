@@ -11,23 +11,20 @@ inline bool check(int x, int y) {
 
 int bfs() {  // TODO
     std::vector<std::vector<int>> dis(n, std::vector<int>(m, INF));
-    std::vector<std::vector<bool>> vis(n, std::vector<bool>(m));
     std::deque<std::pair<int, int>> que;
     que.emplace_front(0, 0);
+    dis[0][0] = 0;
     while (!que.empty()) {
         const auto [x, y] = que.front();
         que.pop_front();
-        if (vis[x][y]) continue;
-        vis[x][y] = true;
         for (const auto& dx : {1, -1}) {
             for (const auto& dy : {1, -1}) {
                 if (check(x + dx, y + dy)) {
-                    if (g[x][y] ^ g[x + dx][y + dy]) {
-                        que.emplace_back(x + dx, y + dy);
-                        dis[x + dx][y + dy] = dis[x][y] + 1;
-                    } else {
-                        que.emplace_front(x + dx, y + dy);
-                        dis[x + dx][y + dy] = dis[x][y];
+                    bool flag = g[x][y] ^ g[x + dx][y + dy];
+                    if (dis[x + dx][y + dy] > dis[x][y] + flag) {
+                        dis[x + dx][y + dy] = dis[x][y] + flag;
+                        if (dis[x + dx][y + dy] > dis[x][y]) que.emplace_back(x + dx, y + dy);
+                        else que.emplace_front(x + dx, y + dy);
                     }
                 }
             }
@@ -50,5 +47,5 @@ signed main() {
             g[i][j] = (c == '/');
         }
     }
-    std::cout << (g.front().front() + bfs() + g.back().back()) << std::endl;
+    std::cout << bfs() << std::endl;
 }
