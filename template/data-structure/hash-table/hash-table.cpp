@@ -1,5 +1,5 @@
 // {P11615}
-#include <bits/stdc++.h>
+#include <bits/extc++.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 
@@ -26,7 +26,7 @@ struct MyHash {
 };
 
 ull n, ans;
-std::unordered_map<ull, ull, MyHash> mp;
+__gnu_pbds::gp_hash_table<ull, ull, MyHash> mp;
 
 signed main() {
 #ifndef ONLINE_JUDGE
