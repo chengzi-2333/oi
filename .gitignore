@@ -12,6 +12,7 @@
 !*.ans
 
 # others
+!LICENSE
 !*.md
 !*.sh
 !requirements.txt
