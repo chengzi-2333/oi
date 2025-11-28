@@ -1,18 +1,5 @@
 // {P11615}
-#include <bits/extc++.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-
-char* rp;
-
-template <typename T>
-inline void fast_read(T& x) {
-    char c;
-    x = 0;
-    while (!isdigit(c = *rp++));
-    do x = x * 10 + (c - '0');
-    while (isdigit(c = *rp++));
-}
+#include <bits/stdc++.h>
 
 using ull = unsigned long long;
 
@@ -26,18 +13,16 @@ struct MyHash {
 };
 
 ull n, ans;
-__gnu_pbds::gp_hash_table<ull, ull, MyHash> mp;
+std::unordered_map<ull, ull, MyHash> mp;
 
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("hash-table.in", "r", stdin);
 #endif  // ONLINE_JUDGE
-    struct stat st;
-    fstat(0, &st);
-    rp = (char*) mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, 0, 0);
-    fast_read(n);
+    std::cin.tie(nullptr)->sync_with_stdio(false);
+    std::cin >> n;
     for (ull x, y, i = 1; i <= n; i++) {
-        fast_read(x), fast_read(y);
+        std::cin >> x >> y;
         ans += i * mp[x];
         mp[x] = y;
     }

@@ -1,8 +1,6 @@
 // {P1226}
 #include <bits/stdc++.h>
 
-using namespace std;
-
 long long n, p, m;
 
 long long qpow(long long n, long long p, long long m) {
@@ -21,7 +19,7 @@ signed main() {
 #ifndef ONLINE_JUDGE
     freopen("quick-pow.in", "r", stdin);
 #endif
-    cin.tie(nullptr) -> sync_with_stdio(false);
-    cin >> n >> p >> m;
+    std::cin.tie(nullptr)->sync_with_stdio(false);
+    std::cin >> n >> p >> m;
     printf("%lld^%lld mod %lld=%lld", n, p, m, qpow(n, p, m));
 }

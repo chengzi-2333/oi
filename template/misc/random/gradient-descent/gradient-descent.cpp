@@ -10,9 +10,7 @@ struct vec2 {
 
     vec2(const vec2& v) : x(v.x), y(v.y) {}
 
-    double magnitude() const {
-        return std::sqrt(x * x + y * y);
-    }
+    double magnitude() const { return std::sqrt(x * x + y * y); }
 
     vec2 normalize() const {
         if (x == 0. && y == 0.) return {x, y};
@@ -20,49 +18,37 @@ struct vec2 {
         return {x / mag, y / mag};
     }
 
-    vec2 operator +(const vec2& v) const {
-        return {x + v.x, y + v.y};
-    }
+    vec2 operator+(const vec2& v) const { return {x + v.x, y + v.y}; }
 
-    vec2 operator -(const vec2& v) const {
-        return {x - v.x, y - v.y};
-    }
+    vec2 operator-(const vec2& v) const { return {x - v.x, y - v.y}; }
 
-    vec2 operator *(double k) const {
-        return {k * x, k * y};
-    }
+    vec2 operator*(double k) const { return {k * x, k * y}; }
 
-    vec2 operator /(double k) const {
-        return {x / k, y / k};
-    }
+    vec2 operator/(double k) const { return {x / k, y / k}; }
 
-    vec2 operator -() const {
-        return {-x, -y};
-    }
+    vec2 operator-() const { return {-x, -y}; }
 
-    bool operator <(const vec2& v) const {
+    bool operator<(const vec2& v) const {
         return this->magnitude() < v.magnitude();
     }
 
-    vec2& operator =(const vec2& v) {
+    vec2& operator=(const vec2& v) {
         x = v.x, y = v.y;
         return *this;
     }
 
-    vec2& operator +=(const vec2& v) {
+    vec2& operator+=(const vec2& v) {
         x += v.x, y += v.y;
         return *this;
     }
 
-    void print() const {
-        std::cout << x << ' ' << y << '\n';
-    }
+    void print() const { std::cout << x << ' ' << y << '\n'; }
 };
 
 constexpr double eta = 0.001, TIME_LIMIT = 0.98;
 
 inline bool time_check() {
-    return (double) std::clock() / CLOCKS_PER_SEC < TIME_LIMIT;
+    return (double)std::clock() / CLOCKS_PER_SEC < TIME_LIMIT;
 }
 
 int n;

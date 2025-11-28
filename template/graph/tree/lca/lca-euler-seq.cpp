@@ -2,27 +2,23 @@
 // Euler sequence + RMQ (ST implemented)
 #include <bits/stdc++.h>
 
-using namespace std;
-
 constexpr int P = 21;
 
 int n, m, s, t;
-vector<unordered_set<int>> g;
-vector<array<int, P>> st;
-vector<int> dep, lg;
+std::vector<std::unordered_set<int>> g;
+std::vector<std::array<int, P>> st;
+std::vector<int> dep;
 
 void dfs(int u, int f) {
     if (!st[u][0]) st[u][0] = ++t;
-    dep[u] = dep[f]+1;
-    for (const auto& v: g[u])
+    dep[u] = dep[f] + 1;
+    for (const auto& v : g[u])
         if (v != f) dfs(v, u);
 }
 
 void init_st() {
-    lg.resize(n+1);
-    for (int i=2; i<=n; i++) lg[i] = lg[i >> 1]+1;
-    for (int i=1; i<=n; i++) {
-        for (int j=1; j<=lg[n]; j++) {
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= std::__lg(n); j++) {
             // st[i][j] = min(st[i][j-1], st[][]);
             // TODO
         }
@@ -30,21 +26,21 @@ void init_st() {
 }
 
 int lca(int a, int b) {
-    int l = min(st[a][0], st[b][0]), r = max(st[a][0], st[b][0]);
-    int k = lg[r-l+1];
-    return ;
+    int l = std::min(st[a][0], st[b][0]), r = std::max(st[a][0], st[b][0]);
+    int k = std::__lg(r - l + 1);
+    return 0;  // TODO
 }
 
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("lca.in", "r", stdin);
 #endif
-    cin.tie(nullptr) -> sync_with_stdio(false);
-    cin >> n >> m >> s;
-    g.resize(n+1);
-    st.resize(n+1), dep.resize(n+1);
-    for (int u, v, i=1; i<n; i++) {
-        cin >> u >> v;
+    std::cin.tie(nullptr)->sync_with_stdio(false);
+    std::cin >> n >> m >> s;
+    g.resize(n + 1);
+    st.resize(n + 1), dep.resize(n + 1);
+    for (int u, v, i = 1; i < n; i++) {
+        std::cin >> u >> v;
         if (u == v) continue;
         g[u].insert(v);
         g[v].insert(u);
@@ -52,8 +48,7 @@ signed main() {
     dfs(s, 0);
     init_st();
     for (int a, b; m; m--) {
-        cin >> a >> b;
-        cout << lca(a, b) << '\n';
+        std::cin >> a >> b;
+        std::cout << lca(a, b) << '\n';
     }
-    cout << flush;
 }

@@ -6,21 +6,22 @@
 constexpr char lf = '\n';
 
 std::vector<int> h;
-auto cmp = std::greater<int>();
+constexpr auto cmp = std::greater<int>();
 
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("heap.in", "r", stdin);
 #endif
     std::cin.tie(nullptr)->sync_with_stdio(false);
-    int n; std::cin >> n;
-    for (int opt, x; n; n--) {
-        std::cin >> opt;
-        switch (opt) {
+    int n;
+    std::cin >> n;
+    for (int op, x; n; n--) {
+        std::cin >> op;
+        switch (op) {
             case 1:
                 std::cin >> x;
                 h.push_back(x);
-                std::push_heap(h.begin(), h.end(), cmp);  // 模板库真好玩儿嘿嘿嘿
+                std::push_heap(h.begin(), h.end(), cmp);
                 break;
             case 2:
                 std::cout << h.front() << lf;

@@ -11,7 +11,8 @@ signed main() {
     freopen("heap.in", "r", stdin);
 #endif
     std::cin.tie(nullptr)->sync_with_stdio(false);
-    int n; std::cin >> n;
+    int n;
+    std::cin >> n;
     for (int opt, x; n; n--) {
         std::cin >> opt;
         switch (opt) {

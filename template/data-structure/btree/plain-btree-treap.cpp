@@ -1,13 +1,6 @@
 // {P3369}
 #include <bits/stdc++.h>
 
-using std::cin, std::cout, std::endl;
-using std::vector, std::pair, std::tuple;
-using std::max, std::min;
-
-constexpr char lf = '\n';
-constexpr char sp = ' ';
-
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("plain-btree-treap.in", "r", stdin);

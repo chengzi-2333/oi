@@ -1,32 +1,6 @@
 // {U300099}
 // TODO: translate and rewrite
 #include <bits/stdc++.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-
-char* rp;
-
-template<typename T>
-inline void fast_read(T& x) {
-	char c;
-	x = 0;
-	while (!isdigit(c = *rp++));
-	do x = x*10 + (c - '0');
-	while (isdigit(c = *rp++));
-}
-
-template<typename T, typename... Args>
-inline void fast_read(T& first, Args&... args) {
-	fast_read(first); fast_read(args...);
-}
-
-inline void mmap_init() {
-    struct stat st;
-    fstat(0, &st);
-    rp = (char*) mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, 0, 0);
-}
-
-using namespace std;
 
 /*! T is the type of the elements
  * Monoid is the operation functor type
@@ -37,16 +11,16 @@ using namespace std;
 template <typename T, typename Monoid, T identity>
 class DisjointSparseTable {
    public:
-    explicit DisjointSparseTable(vector<T> arr) {
+    explicit DisjointSparseTable(std::vector<T> arr) {
         // Find the highest cnt such that pow2 = 2^cnt >= x
         // 齐次化处理，使初始数组大小为2的幂次
         int pow2 = 1, cnt = 0;
-        for (; pow2 < (int) arr.size(); pow2 *= 2, ++cnt);
+        for (; pow2 < (int)arr.size(); pow2 *= 2, ++cnt);
 
         arr.resize(pow2, identity);
-        sum.resize(cnt, vector<T>(pow2));
+        sum.resize(cnt, std::vector<T>(pow2));
 
-        for (int level = 0; level < (int) sum.size(); ++level) {
+        for (int level = 0; level < (int)sum.size(); ++level) {
             for (int block = 0; block < 1 << level; ++block) {
                 // The first half of the block contains suffix sums,
                 // the second half contains prefix sums
@@ -70,6 +44,7 @@ class DisjointSparseTable {
             }
         }
     }
+
     /*! Returns Monoid sum over range [l, r)*/
     T query(int l, int r) const {
         assert(l < r);
@@ -89,14 +64,14 @@ class DisjointSparseTable {
     }
 
    private:
-    vector<vector<T>> sum;
+    std::vector<std::vector<T>> sum;
     Monoid operate;
 };
 
-template<typename F>
+template <typename F>
 void test() {
     // Tests the DisjointSparseTable
-    vector<int> data{6, 2, 4, 1, 7, 3, 4, 2, 7, 2, 4, 1, 6};
+    std::vector<int> data{6, 2, 4, 1, 7, 3, 4, 2, 7, 2, 4, 1, 6};
     DisjointSparseTable<int, F, 0> sp{data};
     for (size_t start = 0; start < data.size(); ++start) {
         for (size_t end = start + 1; end <= data.size(); ++end) {
@@ -106,9 +81,9 @@ void test() {
     }
 }
 
-constexpr long long MOD = 1e9+7;
+constexpr long long MOD = 1e9 + 7;
 int n, q, ans;
-vector<long long> a;
+std::vector<long long> a;
 
 struct op {
     long long operator()(long long a, long long b) const {
@@ -119,15 +94,15 @@ struct op {
 int main() {
 #ifndef ONLINE_JUDGE
     freopen("disjoint-sparse-table.in", "r", stdin);
-#endif // ONLINE_JUDGE
-    mmap_init();
-    fast_read(n, q);
-    a.resize(n);
-    for (auto& i: a) fast_read(i);
+#endif  // ONLINE_JUDGE
+    std::cin.tie(nullptr)->sync_with_stdio(false);
+    std::cin >> n >> q;
+    std::copy_n(std::istream_iterator<long long>(std::cin), n,
+                std::back_insert_iterator<std::vector<long long>>(a));
     DisjointSparseTable<long long, op, 1> sp{a};
     for (int l, r; q; q--) {
-        fast_read(l, r);
-        ans ^= sp.query(l-1, r) % MOD;
+        std::cin >> l >> r;
+        ans ^= sp.query(l - 1, r) % MOD;
     }
-    printf("%d", ans);
+    std::cout << ans << std::endl;
 }

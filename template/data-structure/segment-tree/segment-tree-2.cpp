@@ -1,10 +1,8 @@
 // {P3373}
-#include <iostream>
-#include <memory>
+#include <bits/stdc++.h>
 
-
-constexpr int N = 1e5;
-long long n, q, m, a[N + 2];
+std::vector<long long> a(1);
+long long n, q, m;
 
 template <typename T>
 struct SegTree {
@@ -12,17 +10,11 @@ struct SegTree {
     T key = 0, mul = 1, add = 0;
     std::unique_ptr<SegTree> left, right;
 
-    inline static int middle(int l, int r) {
-        return l + ((r - l) >> 1);
-    }
+    inline static int middle(int l, int r) { return l + ((r - l) >> 1); }
 
-    int middle() {
-        return middle(this->l, this->r);
-    }
+    int middle() { return middle(this->l, this->r); }
 
-    bool contains(int l, int r) {
-        return this->l >= l && this->r <= r;
-    }
+    bool contains(int l, int r) { return this->l >= l && this->r <= r; }
 
     void modify_add(T k) {
         this->key = (this->key + k * (this->r - this->l + 1)) % m;
@@ -41,9 +33,7 @@ struct SegTree {
         this->mul = (this->mul * mul) % m;
     }
 
-    void push_up() {
-        this->key = (this->left->key + this->right->key) % m;
-    }
+    void push_up() { this->key = (this->left->key + this->right->key) % m; }
 
     void push_down() {
         this->left->update(this->add, this->mul);
@@ -52,13 +42,14 @@ struct SegTree {
         this->mul = 1;
     }
 
-    SegTree(int l, int r): l(l), r(r) {
+    SegTree(int l, int r) : l(l), r(r) {
         if (l != r) {
             auto mid = middle();
             this->left = std::make_unique<SegTree>(l, mid);
             this->right = std::make_unique<SegTree>(mid + 1, r);
             this->push_up();
-        } else this->key = a[l];
+        } else
+            this->key = a[l];
     }
 
     void update_mul(int l, int r, T k) {
@@ -91,28 +82,28 @@ struct SegTree {
     }
 };
 
-
 int main() {
 #ifndef ONLINE_JUDGE
     freopen("segment-tree-2.in", "r", stdin);
 #endif
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> n >> q >> m;
-    for (int i = 1; i <= n; i++) std::cin >> a[i];
+    std::copy_n(std::istream_iterator<long long>(std::cin), n,
+                std::back_insert_iterator<std::vector<long long>>(a));
     SegTree<long long> tree(1, n);
     for (long long op, l, r, k; q; q--) {
         std::cin >> op >> l >> r;
         switch (op) {
-            case 1: 
+            case 1:
                 std::cin >> k;
-                tree.update_mul(l, r, k); 
+                tree.update_mul(l, r, k);
                 break;
-            case 2: 
+            case 2:
                 std::cin >> k;
-                tree.update_add(l, r, k); 
+                tree.update_add(l, r, k);
                 break;
-            case 3: 
-                std::cout << tree.query(l, r) << '\n'; 
+            case 3:
+                std::cout << tree.query(l, r) << '\n';
                 break;
         }
     }

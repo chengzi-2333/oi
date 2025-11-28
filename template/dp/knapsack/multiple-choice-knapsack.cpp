@@ -8,7 +8,7 @@ std::vector<int> f;
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("multiple-choice-knapsack.in", "r", stdin);
-#endif // ONLINE_JUDGE
+#endif  // ONLINE_JUDGE
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> c >> n;
     for (int v, w, k, i = 1; i <= n; i++) {

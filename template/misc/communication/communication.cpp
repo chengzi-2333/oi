@@ -2,14 +2,15 @@
 // Hamming Code
 #include <string>
 
-inline bool is_pw2(int x) {return x && !((x-1) & x);}
+inline bool is_pw2(int x) { return x && !((x - 1) & x); }
 
 inline int fill_buf(const std::string& s, unsigned char* buf) {
     int k = 0;
     while ((1 << k) < s.length() + k + 1) k++;
     int buf_size = (1 << k) - 1;
     unsigned char* pbuf = buf + 1;
-    for (auto it = s.begin() + 1; pbuf - buf <= buf_size && it < s.end(); pbuf++) {
+    for (auto it = s.begin() + 1; pbuf - buf <= buf_size && it < s.end();
+         pbuf++) {
         if (!is_pw2(pbuf - buf)) *pbuf = *it++ - '0';
     }
     return buf_size;

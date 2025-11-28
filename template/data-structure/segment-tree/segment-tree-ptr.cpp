@@ -1,7 +1,5 @@
 // {P3372}
-#include <iostream>
-#include <memory>
-#include <vector>
+#include <bits/stdc++.h>
 
 // T: element type, I: identity of the operation, F: operation, R: range type
 template <typename T, T I = T(), typename F = std::plus<T>, typename R = size_t>
@@ -101,6 +99,7 @@ class SegmentTree {
     }
 };
 
+std::vector<long long> a(1);
 long long n, m;
 
 signed main() {
@@ -109,8 +108,8 @@ signed main() {
 #endif  // ONLINE_JUDGE
     std::cin.tie(nullptr)->sync_with_stdio(false);
     std::cin >> n >> m;
-    std::vector<long long> a(n + 1);
-    for (auto it = a.begin() + 1; it != a.end(); it++) std::cin >> *it;
+    std::copy_n(std::istream_iterator<long long>(std::cin), n,
+                std::back_insert_iterator<std::vector<long long>>(a));
     SegmentTree<long long> tree(1, n, a, true);
     for (long long op, l, r, k; m; m--) {
         std::cin >> op >> l >> r;
@@ -121,5 +120,4 @@ signed main() {
             tree.update(l, r, k);
         }
     }
-    std::cout << std::flush;
 }

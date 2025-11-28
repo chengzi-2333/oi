@@ -2,9 +2,11 @@
 
 constexpr int N = 1e4;
 int n;
-int a[N + 5], f[N + 5];
+std::vector<int> a(1);
+int f[N + 5];
 
-inline int lis(const std::function<bool(int, int)>& cmp) {
+template <typename C>
+inline int lis(const C& cmp) {
     memset(f, 0, (n + 1) * sizeof(int));
     for (int i = 1; i <= n; i++) {
         f[i] = 1;
@@ -19,7 +21,7 @@ inline int lis(const std::function<bool(int, int)>& cmp) {
 
 signed main() {
     std::cin.tie(nullptr)->sync_with_stdio(false);
-    for (int i = 1; i <= n; i++)
-        std::cin >> a[i];
+    std::copy_n(std::istream_iterator<int>(std::cin), n,
+                std::back_insert_iterator<std::vector<int>>(a));
     std::cout << lis(std::greater<>()) << std::endl;
 }

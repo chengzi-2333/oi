@@ -1,7 +1,5 @@
 // {P13825}
-#include <iostream>
-#include <memory>
-
+#include <bits/stdc++.h>
 
 template <typename T, typename R = size_t>
 struct SegTree {
@@ -10,32 +8,24 @@ struct SegTree {
     R l, r;
     T key = 0, tag = 0;
     tree_ptr left = nullptr, right = nullptr;
-    
-    inline static R middle(R l, R r) {
-        return l + ((r - l) >> 1);
-    }
-    
-    inline R middle() {
-        return middle(this->l, this->r);
-    }
-    
-    inline bool contains(R l, R r) {
-        return this->l >= l && this->r <= r;
-    }
+
+    inline static R middle(R l, R r) { return l + ((r - l) >> 1); }
+
+    inline R middle() { return middle(this->l, this->r); }
+
+    inline bool contains(R l, R r) { return this->l >= l && this->r <= r; }
 
     inline bool check(R l, R r) {
         return l <= r && l <= this->r && r >= this->l;
     }
-    
+
     inline void update(T k) {
         this->key += k * static_cast<T>(this->r - this->l + 1);
         this->tag += k;
     }
-    
-    inline void push_up() {
-        this->key = this->left->key + this->right->key;
-    }
-    
+
+    inline void push_up() { this->key = this->left->key + this->right->key; }
+
     inline void push_down() {
         this->allocate();
         if (this->tag) {
@@ -44,7 +34,7 @@ struct SegTree {
             this->tag = 0;
         }
     }
-    
+
     inline static tree_ptr& allocate(tree_ptr& ptr, R l, R r) {
         if (ptr == nullptr) ptr = std::make_unique<SegTree>(l, r);
         return ptr;
@@ -55,10 +45,9 @@ struct SegTree {
         allocate(this->left, this->l, mid);
         allocate(this->right, mid + 1, this->r);
     }
-    
-    SegTree(R l, R r): l(l), r(r) {
-    }
-    
+
+    SegTree(R l, R r) : l(l), r(r) {}
+
     void update(R l, R r, T k) {
         if (!check(l, r)) return;
         if (this->contains(l, r)) return this->update(k);
@@ -66,7 +55,7 @@ struct SegTree {
         this->left->update(l, r, k), this->right->update(l, r, k);
         this->push_up();
     }
-    
+
     T query(R l, R r) {
         if (!check(l, r)) return 0;
         if (this->contains(l, r)) return this->key;
@@ -74,7 +63,6 @@ struct SegTree {
         return this->left->query(l, r) + this->right->query(l, r);
     }
 };
-
 
 unsigned long long n, m;
 
@@ -94,5 +82,4 @@ signed main() {
             tree.update(l, r, k);
         }
     }
-    std::cout << std::flush;
 }

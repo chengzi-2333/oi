@@ -1,93 +1,40 @@
 // {P3368}
-#include <ctype.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-
-#define BUFSIZE (1 << 20)
-
-char *rp;
-char wbuf[BUFSIZE], *wp = wbuf;
-
-inline void flush() {
-    fwrite(wbuf, 1, wp - wbuf, stdout);
-    wp = wbuf;
-}
-
-inline char get() {
-    return *rp++;
-}
-
-inline void put(const char& c) {
-    if (wp - wbuf == BUFSIZE) flush();
-    *wp++ = c;
-}
-
-inline void fast_read(int& x) {
-    char c;
-    x = 0;
-    int neg = 1;
-    while (!isdigit(c = get())) {
-        if (c == '-') neg = -1;
-    }
-    do x = x * 10 + neg * (c - '0');
-    while (isdigit(c = get()));
-}
-
-inline void fast_write(int x) {
-    int neg = 1;
-    if (x < 0) {
-        neg = -1;
-        put('-');
-    }
-    static char st[40];
-    char* tp = st;
-    do {
-        *tp++ = '0' + neg * (x % 10);
-        x /= 10;
-    } while (x);
-    while (tp != st) put(*--tp);
-}
-
-template<typename T, typename... A>
-inline void fast_read(T& fst, A&... args) {
-    fast_read(fst), fast_read(args...);
-}
-
-#define lowbit(x) (x & -x)
+#include <bits/stdc++.h>
 
 int n, m;
-int arr[(int) 5e5+10];
+std::vector<int> arr;
+
+inline int lowbit(int x) { return x & -x; }
 
 inline void update(int x, int k) {
-    for (; x<=n; x+=lowbit(x)) arr[x] += k;
+    for (; x <= n; x += lowbit(x)) arr[x] += k;
 }
 
 inline int query(int x) {
     int sum = 0;
-    for (; x; x-=lowbit(x)) sum += arr[x];
+    for (; x; x -= lowbit(x)) sum += arr[x];
     return sum;
 }
 
 signed main() {
 #ifndef ONLINE_JUDGE
     freopen("bit-diff.in", "r", stdin);
-#endif // ONLINE_JUDGE
-    struct stat state;
-    fstat(STDIN_FILENO, &state);
-    rp = (char*) mmap(NULL, state.st_size, PROT_READ, MAP_PRIVATE, STDIN_FILENO, 0);
-    // main
-    fast_read(n, m);
-    for (int a, p=0, i=1; i<=n; i++) {
-        fast_read(a);
-        update(i, a-p);
+#endif  // ONLINE_JUDGE
+    std::cin.tie(nullptr)->sync_with_stdio(false);
+    std::cin >> n >> m;
+    arr.resize(n + 1);
+    for (int a, p = 0, i = 1; i <= n; i++) {
+        std::cin >> a;
+        update(i, a - p);
         p = a;
     }
     for (int op, x, y, k; m; m--) {
-        fast_read(op, x);
-        if (op-1) fast_write(query(x)), put('\n');
-        else fast_read(y, k), update(y+1, -k), update(x, k);
+        std::cin >> op >> x;
+        if (op - 1)
+            std::cout << query(x) << '\n';
+        else {
+            std::cin >> y >> k;
+            update(y + 1, -k), update(x, k);
+        }
     }
-    flush();
 }

@@ -20,7 +20,7 @@ void build_tree(int u, int f) {
 void cut_tree(int u, int ftop) {
     top[u] = ftop;
     if (hson[u]) cut_tree(hson[u], ftop);
-    for (const auto& v: g[u]) {
+    for (const auto& v : g[u]) {
         if (v != hson[u] && v != fa[u]) cut_tree(v, v);
     }
 }
