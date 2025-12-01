@@ -8,7 +8,7 @@ import logging
 import asyncio
 import struct
 import collections
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple
 
 import yaml
 import colorlog
@@ -306,7 +306,7 @@ class PaintboardClient:
                 status = data[offset + 4]
                 offset += 5
                 status_msg = PAINT_STATUS.get(status, f"未知状态码{status}")
-                logger.info(
+                logger.debug(
                     "绘画结果[AccessKey: %s, ID: %s]: %s",
                     self.access_key,
                     paint_id,
@@ -376,6 +376,7 @@ class PaintboardClient:
         # 加入发送队列（粘包处理）
         async with self.send_lock:
             self.paint_queue.extend(packet)
+        await asyncio.sleep(0.16)
         return current_id
 
     async def worker(self):
@@ -397,8 +398,6 @@ class PaintboardClient:
                     task = await asyncio.wait_for(task_queue.get(), timeout=1.0)
                     if isinstance(task, PaintTask):
                         await self.paint_pixel(*task)
-                        # 短暂延时避免发送过快
-                        await asyncio.sleep(0.01)
                     task_queue.task_done()
                 except asyncio.TimeoutError:
                     # 超时继续循环
@@ -468,8 +467,6 @@ class PaintboardClient:
                                     g,
                                     b,
                                 )
-                                # 短暂延时避免发送过快
-                                await asyncio.sleep(0.1)
                     maintain_queue.task_done()
                 except asyncio.TimeoutError:
                     # 超时继续循环
@@ -485,34 +482,29 @@ class PaintboardClient:
             logger.info("维护客户端已关闭，总共发送了 %s 个数据包", self.packet_counter)
 
 
-async def populate_task_queue(
+async def fill_task_queue(
     pixels: np.array, start_x: int, start_y: int, ignore_white: bool = False
 ):
     """将图像像素填充到任务队列中"""
-    target_height = len(pixels)
-    if target_height == 0:
+    height = len(pixels)
+    if height == 0:
         logger.warning("像素数据为空，无法填充任务队列")
         return
-    target_width = len(pixels[0])
+    width = len(pixels[0])
 
-    # 校验所有行宽度一致
-    if any(len(row) != target_width for row in pixels):
-        logger.warning("像素数据各行宽度不一致，无效数据")
-        return
+    # # 校验所有行宽度一致
+    # if any(len(row) != width for row in pixels):
+    #     logger.warning("像素数据各行宽度不一致，无效数据")
+    #     return
 
     # 校验绘制范围是否超出画板
-    if (
-        start_x < 0
-        or start_y < 0
-        or start_x + target_width > 1000
-        or start_y + target_height > 600
-    ):
+    if start_x < 0 or start_y < 0 or start_x + width > 1000 or start_y + height > 600:
         logger.warning(
             "绘制范围超出画板！起始(%s, %s)+尺寸(%s, %s) > (1000, 600)",
             start_x,
             start_y,
-            target_width,
-            target_height,
+            width,
+            height,
         )
         return
 
@@ -520,14 +512,14 @@ async def populate_task_queue(
         "开始填充任务队列：起始位置(%s, %s)，尺寸(%s, %s)",
         start_x,
         start_y,
-        target_width,
-        target_height,
+        width,
+        height,
     )
 
     # 将所有像素任务加入队列
     task_count = 0
-    for y in range(target_height):
-        for x in range(target_width):
+    for y in range(height):
+        for x in range(width):
             r, g, b = pixels[y][x]
             if ignore_white and (r, g, b) == (255, 255, 255):
                 continue
@@ -551,7 +543,7 @@ async def main():
     settings = config.get("settings")
     accounts = config.get("accounts")
 
-    START_X, START_Y = settings.get("pos")
+    start_x, start_y = settings.get("pos")
     # 1. 获取账号列表和token
     tokens = [get_paint_token(uid, key) for uid, key in accounts]
     if not any(tokens):
@@ -564,10 +556,8 @@ async def main():
         logger.error("图片处理失败")
         return
 
-    # TODO: fix incomplete picture
-    # TODO: fill pixels by order
     # 3. 填充任务队列
-    await populate_task_queue(pixels, START_X, START_Y, ignore_white=True)
+    await fill_task_queue(pixels, start_x, start_y)
 
     # 4. 启动工作客户端
     workers = []
@@ -585,7 +575,7 @@ async def main():
     # 5. 启动维护客户端（使用第一个账号）
     maintainer_client = PaintboardClient(accounts[0][0], tokens[0], accounts[0][1])
     maintainer_task = asyncio.create_task(
-        maintainer_client.maintainer(pixels, START_X, START_Y)
+        maintainer_client.maintainer(pixels, start_x, start_y)
     )
     tasks.append(maintainer_task)
 
