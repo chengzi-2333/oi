@@ -14,6 +14,7 @@ import yaml
 import colorlog
 import requests
 import websockets
+import numpy as np
 from PIL import Image
 from websockets.protocol import State
 
@@ -125,14 +126,12 @@ def get_paint_token(uid: int, access_key: str) -> Optional[str]:
 
 
 # -------------------------- 图像处理（支持自定义尺寸） --------------------------
-def read_image(
-    image_path: str, target_size: Tuple[int, int]
-) -> Optional[List[List[Dict]]]:
+def read_image(image_path: str, target_size: Tuple[int, int]) -> Optional[np.array]:
     """
     读取图片并保持原始尺寸，返回像素数据
     :param image_path: 图片路径
     :return: 像素数据
-    像素数据格式：[height][width] 二维列表，每个元素为{r, g, b}
+    像素数据格式：[height][width] 二维列表
     """
     try:
         with Image.open(image_path) as img:
@@ -150,24 +149,15 @@ def read_image(
                 return None
 
             # 转换为RGB模式（去除Alpha透明通道，避免像素颜色异常）
-            img_resize = img.resize(target_size)
-            img_rgb = img_resize.convert("RGB")
-
-            # 按原始尺寸读取像素数据（逐行逐列，确保数据完整性）
-            pixels = []
-            for y in range(height):
-                row = []
-                for x in range(width):
-                    r, g, b = img_rgb.getpixel((x, y))
-                    row.append({"r": r, "g": g, "b": b})
-                pixels.append(row)
+            img = img.convert("RGB").resize(target_size)
 
             logger.info(
                 "成功读取图片：尺寸(%s, %s)，总像素%s个",
                 *target_size,
                 width * height,
             )
-            return pixels
+            return np.asarray(img)
+
     except FileNotFoundError:
         logger.error("图片文件未找到：%s", image_path)
         return None
@@ -176,41 +166,39 @@ def read_image(
         return None
 
 
+# def chunk_image(pixels: List[List[Dict]], chunk_num: int) -> List[List[List[Dict]]]:
+#     """将图片分为 chunk_num 个块，大pixels的行数被均分。对于每个chunk，如果总数无法被整除，则最后一个块将多一些"""
+#     if chunk_num <= 0:
+#         raise ValueError("chunk_num 必须大于0")
 
-def chunk_image(pixels: List[List[Dict]], chunk_num: int) -> List[List[List[Dict]]]:
-    """将图片分为 chunk_num 个块，大pixels的行数被均分。对于每个chunk，如果总数无法被整除，则最后一个块将多一些"""
-    if chunk_num <= 0:
-        raise ValueError("chunk_num 必须大于0")
+#     total_rows = len(pixels)
+#     if total_rows == 0:
+#         return []
 
-    total_rows = len(pixels)
-    if total_rows == 0:
-        return []
+#     # 计算每个块的基础行数和余数
+#     base_rows_per_chunk = total_rows // chunk_num
+#     remainder = total_rows % chunk_num
 
-    # 计算每个块的基础行数和余数
-    base_rows_per_chunk = total_rows // chunk_num
-    remainder = total_rows % chunk_num
+#     chunks = []
+#     start_row = 0
 
-    chunks = []
-    start_row = 0
+#     for i in range(chunk_num):
+#         # 前remainder个块会多分配一行
+#         rows_in_this_chunk = base_rows_per_chunk + int(i < remainder)
+#         end_row = start_row + rows_in_this_chunk
 
-    for i in range(chunk_num):
-        # 前remainder个块会多分配一行
-        rows_in_this_chunk = base_rows_per_chunk + int(i < remainder)
-        end_row = start_row + rows_in_this_chunk
+#         # 提取当前块的像素数据
+#         chunk = pixels[start_row:end_row]
+#         chunks.append(chunk)
 
-        # 提取当前块的像素数据
-        chunk = pixels[start_row:end_row]
-        chunks.append(chunk)
+#         start_row = end_row
 
-        start_row = end_row
-
-    return chunks
+#     return chunks
 
 
 # -------------------------- 任务定义 --------------------------
 PaintTask = collections.namedtuple("PaintTask", ["x", "y", "r", "g", "b"])
 MaintainTask = collections.namedtuple("MaintainTask", ["x", "y", "r", "g", "b"])
-
 
 
 # -------------------------- WebSocket客户端 --------------------------
@@ -425,14 +413,7 @@ class PaintboardClient:
                 await self.ws.close()
             logger.info("客户端已关闭，总共发送了 %s 个数据包", self.packet_counter)
 
-    async def maintainer(
-        self,
-        pixels_map: Dict[Tuple[int, int], Tuple[int, int, int]],
-        start_x: int,
-        start_y: int,
-        width: int,
-        height: int,
-    ):
+    async def maintainer(self, pixels: np.array, start_x: int, start_y: int):
         """维护协程：从维护队列获取任务并执行"""
         if not await self.connect():
             return
@@ -443,6 +424,9 @@ class PaintboardClient:
 
             # 等待连接稳定
             await asyncio.sleep(1)
+
+            width = len(pixels[0])
+            height = len(pixels)
 
             logger.info(
                 "维护者开始监听区域 (%s,%s) 到 (%s,%s)",
@@ -463,38 +447,29 @@ class PaintboardClient:
                             start_x <= task.x < start_x + width
                             and start_y <= task.y < start_y + height
                         ):
-
                             # 获取该位置应该的颜色
-                            if (task.x, task.y) in pixels_map:
-                                expected_r, expected_g, expected_b = pixels_map[
-                                    (task.x, task.y)
-                                ]
+                            r, g, b = pixels[task.y - start_y, task.x - start_x]
 
-                                # 检查颜色是否被修改
-                                if (
-                                    expected_r != task.r
-                                    or expected_g != task.g
-                                    or expected_b != task.b
-                                ):
+                            # 检查颜色是否被修改
+                            if r != task.r or g != task.g or b != task.b:
+                                logger.info(
+                                    "检测到像素被修改: (%s,%s): (%s, %s, %s) -> (%s, %s, %s)",
+                                    *task,
+                                    r,
+                                    g,
+                                    b,
+                                )
 
-                                    logger.info(
-                                        "检测到像素被修改: (%s,%s): (%s, %s, %s) -> (%s, %s, %s)",
-                                        *task,
-                                        expected_r,
-                                        expected_g,
-                                        expected_b,
-                                    )
-
-                                    # 重新绘制正确的颜色
-                                    await self.paint_pixel(
-                                        task.x,
-                                        task.y,
-                                        expected_r,
-                                        expected_g,
-                                        expected_b,
-                                    )
-                                    # 短暂延时避免发送过快
-                                    await asyncio.sleep(0.1)
+                                # 重新绘制正确的颜色
+                                await self.paint_pixel(
+                                    task.x,
+                                    task.y,
+                                    r,
+                                    g,
+                                    b,
+                                )
+                                # 短暂延时避免发送过快
+                                await asyncio.sleep(0.1)
                     maintain_queue.task_done()
                 except asyncio.TimeoutError:
                     # 超时继续循环
@@ -511,7 +486,7 @@ class PaintboardClient:
 
 
 async def populate_task_queue(
-    pixels: List[List[Dict]], start_x: int, start_y: int, ignore_white: bool = False
+    pixels: np.array, start_x: int, start_y: int, ignore_white: bool = False
 ):
     """将图像像素填充到任务队列中"""
     target_height = len(pixels)
@@ -553,30 +528,13 @@ async def populate_task_queue(
     task_count = 0
     for y in range(target_height):
         for x in range(target_width):
-            pixel = pixels[y][x]
-            if ignore_white and tuple(pixel.values()) == (255, 255, 255):
+            r, g, b = pixels[y][x]
+            if ignore_white and (r, g, b) == (255, 255, 255):
                 continue
-            await task_queue.put(PaintTask(start_x + x, start_y + y, *pixel.values()))
+            await task_queue.put(PaintTask(start_x + x, start_y + y, r, g, b))
             task_count += 1
 
     logger.info("任务队列填充完成，共添加 %s 个任务", task_count)
-
-
-def create_pixels_map(
-    pixels: List[List[Dict]], start_x: int, start_y: int
-) -> Dict[Tuple[int, int], Tuple[int, int, int]]:
-    """创建像素位置到颜色的映射"""
-    pixels_map = {}
-    target_height = len(pixels)
-    if target_height == 0:
-        return pixels_map
-    target_width = len(pixels[0])
-
-    for y in range(target_height):
-        for x in range(target_width):
-            pixels_map[(start_x + x, start_y + y)] = tuple(pixels[y][x].values())
-
-    return pixels_map
 
 
 async def main():
@@ -597,18 +555,17 @@ async def main():
     # 1. 获取账号列表和token
     tokens = [get_paint_token(uid, key) for uid, key in accounts]
     if not any(tokens):
-        logger.error("获取Token失败，程序退出")
+        logger.error("获取Token失败")
         return
 
     # 2. 读取图片
     pixels = read_image(settings.get("pic"), settings.get("size"))
-    if not pixels:
-        logger.error("图片处理失败，程序退出")
+    if pixels is None:
+        logger.error("图片处理失败")
         return
 
-    # 创建像素映射用于维护
-    pixels_map = create_pixels_map(pixels, START_X, START_Y)
-
+    # TODO: fix incomplete picture
+    # TODO: fill pixels by order
     # 3. 填充任务队列
     await populate_task_queue(pixels, START_X, START_Y, ignore_white=True)
 
@@ -628,9 +585,7 @@ async def main():
     # 5. 启动维护客户端（使用第一个账号）
     maintainer_client = PaintboardClient(accounts[0][0], tokens[0], accounts[0][1])
     maintainer_task = asyncio.create_task(
-        maintainer_client.maintainer(
-            pixels_map, START_X, START_Y, len(pixels[0]), len(pixels)
-        )
+        maintainer_client.maintainer(pixels, START_X, START_Y)
     )
     tasks.append(maintainer_task)
 
@@ -660,5 +615,6 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("程序被用户中断")
-    except Exception as e:
-        logger.error("程序运行异常: %s", e)
+    except Exception as error:
+        logger.error("程序运行异常: %s", error)
+        raise error
