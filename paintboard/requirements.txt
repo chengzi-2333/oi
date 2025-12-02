@@ -3,3 +3,4 @@ colorlog
 requests
 websockets
 pillow
+numpy

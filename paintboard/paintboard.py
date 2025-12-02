@@ -47,7 +47,7 @@ logger = get_logger()
 # -------------------------- 常量定义 --------------------------
 BASE_DOMIN = "paintboard.luogu.me"
 GET_TOKEN_URL = f"https://{BASE_DOMIN}/api/auth/gettoken"
-WS_URL = f"wss://{BASE_DOMIN}/api/paintboard/ws"  # TODO: use read/write only link
+WS_URL = f"wss://{BASE_DOMIN}/api/paintboard/ws"
 
 # 操作码定义
 OP_S2C_HEARTBEAT = 0xFC  # 服务端心跳请求
@@ -68,6 +68,7 @@ PAINT_STATUS = {
 }
 
 # 全局限制（根据 README 调整）
+MAX_CLIENTS = 3
 MAX_CONNECTIONS = 3
 MAX_PACKETS_PER_SECOND_PER_CONNECTION = 128  # 每连接每秒最多128个包
 SEND_INTERVAL = 1.0 / MAX_PACKETS_PER_SECOND_PER_CONNECTION
@@ -78,9 +79,8 @@ BATCH_SEND_INTERVAL = 0.02
 # 任务队列
 task_queue = asyncio.Queue()
 maintain_queue = asyncio.Queue()
-paint_events = {}
-paint_events_lock = asyncio.Lock()
 
+client_semaphore = asyncio.Semaphore(MAX_CLIENTS)
 connection_semaphore = asyncio.Semaphore(MAX_CONNECTIONS)
 
 
@@ -154,6 +154,8 @@ def read_image(image_path: str, target_size: Tuple[int, int]) -> Optional[np.arr
 
             # 转换为RGB模式（去除Alpha透明通道，避免像素颜色异常）
             logger.info("尺寸转换: (%s, %s) -> (%s, %s)", *img.size, *target_size)
+            # TODO: use original size if config "size" is None
+            # TODO: proportional scaling if weight or height is -1
             img = img.convert("RGB").resize(target_size)
 
             return np.asarray(img)
@@ -174,23 +176,27 @@ PaintResult = collections.namedtuple("PaintResult", ["paint_id", "status"])
 class PaintboardClient:
     """绘画客户端"""
 
-    def __init__(self, uid: int, access_key: str, token: str):
+    async def __init__(self, uid: int, access_key: str, token: str):
+        await client_semaphore.acquire()
         self.access_key = access_key
         self.uid = uid
         self.token = token
         self.ws: Optional[websockets.connect] = None
-        self.paint_id = 0  # 绘画识别码（自增，确保唯一性）
+        self.paint_id = (id(self) ^ hash(self)) % 4294967296  # 绘画识别码（自增，确保唯一性）
         self.paint_queue = bytearray()  # 绘画包队列（处理粘包）
         self.send_lock = asyncio.Lock()  # 发送锁
         self.recv_lock = asyncio.Lock()  # 接收锁
         self.packet_counter = 0  # 包计数器
         self.last_send_time = 0  # 上次发送时间
+        self.paint_events = {}
+        self.paint_events_lock = asyncio.Lock()
 
     async def shutdown(self):
         """关闭客户端"""
-        await connection_semaphore.release()
+        connection_semaphore.release()
         if self.connection_check():
             await self.ws.close()
+        client_semaphore.release()
 
     async def connect(self) -> bool:
         """建立WebSocket连接"""
@@ -280,8 +286,8 @@ class PaintboardClient:
                     status_msg,
                 )
                 try:
-                    async with paint_events_lock:  # TODO: 减少miss key次数及丢包率
-                        event = paint_events.pop(res.paint_id)
+                    async with self.paint_events_lock:
+                        event = self.paint_events.pop(res.paint_id)
                     if res.status == 0xEE:  # 冷却状态
                         await task_queue.put(event)
                         logger.info("检测到冷却状态，增加等待时间")
@@ -365,8 +371,8 @@ class PaintboardClient:
 
         # 加入发送队列（粘包处理）
         await asyncio.sleep(BATCH_SEND_INTERVAL)
-        async with paint_events_lock:
-            paint_events.update({current_id: event})
+        async with self.paint_events_lock:
+            self.paint_events.update({current_id: event})
         async with self.send_lock:
             self.paint_queue.extend(packet)
 
@@ -508,6 +514,7 @@ async def main():
     """
     使用任务队列进行多账号绘图
     """
+    # TODO: passing arguments via command line
     try:
         with open("config.yml", "r", encoding="utf-8") as file:
             config = yaml.load(file, yaml.Loader)
@@ -544,7 +551,7 @@ async def main():
     clients: PaintboardClient = []
     tasks: asyncio.Task = []
     for token, account in zip(tokens, accounts):
-        client = PaintboardClient(*account, token)
+        client = await PaintboardClient(*account, token)
         # worker
         task = asyncio.create_task(client.worker())
         clients.append(client)
