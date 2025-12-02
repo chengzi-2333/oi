@@ -1,5 +1,5 @@
 """
-From: https://www.luogu.me/paste/t07d9xob
+Origin: https://www.luogu.me/paste/t07d9xob
 """
 
 import time
@@ -8,7 +8,7 @@ import logging
 import asyncio
 import struct
 import collections
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import yaml
 import colorlog
@@ -22,8 +22,8 @@ from websockets.protocol import State
 def get_logger(level=logging.INFO):
     """生成带颜色的日志输出"""
     # 创建logger对象
-    logger = logging.getLogger()
-    logger.setLevel(level)
+    log = logging.getLogger()
+    log.setLevel(level)
     # 创建控制台日志处理器
     console_handler = logging.StreamHandler()
     console_handler.setLevel(level)
@@ -35,19 +35,19 @@ def get_logger(level=logging.INFO):
     # 将颜色输出格式添加到控制台日志处理器
     console_handler.setFormatter(color_formatter)
     # 移除默认的handler
-    for handler in logger.handlers:
-        logger.removeHandler(handler)
+    for handler in log.handlers:
+        log.removeHandler(handler)
     # 将控制台日志处理器添加到logger对象
-    logger.addHandler(console_handler)
-    return logger
+    log.addHandler(console_handler)
+    return log
 
 
 logger = get_logger()
 
 # -------------------------- 常量定义 --------------------------
-BASE_URL = "paintboard.luogu.me"
-GET_TOKEN_URL = f"https://{BASE_URL}/api/auth/gettoken"
-WS_URL = f"wss://{BASE_URL}/api/paintboard/ws"
+BASE_DOMIN = "paintboard.luogu.me"
+GET_TOKEN_URL = f"https://{BASE_DOMIN}/api/auth/gettoken"
+WS_URL = f"wss://{BASE_DOMIN}/api/paintboard/ws"  # TODO: use read/write only link
 
 # 操作码定义
 OP_S2C_HEARTBEAT = 0xFC  # 服务端心跳请求
@@ -68,19 +68,23 @@ PAINT_STATUS = {
 }
 
 # 全局限制（根据 README 调整）
-MAX_CONNECTIONS = 7
+MAX_CONNECTIONS = 3
 MAX_PACKETS_PER_SECOND_PER_CONNECTION = 128  # 每连接每秒最多128个包
 SEND_INTERVAL = 1.0 / MAX_PACKETS_PER_SECOND_PER_CONNECTION
 
 # 粘包设置
-BATCH_SEND_INTERVAL = 0.02  # 20ms 发送一次，符合 README 建议
+BATCH_SEND_INTERVAL = 0.02
 
 # 任务队列
 task_queue = asyncio.Queue()
 maintain_queue = asyncio.Queue()
+paint_events = {}
+paint_events_lock = asyncio.Lock()
+
+connection_semaphore = asyncio.Semaphore(MAX_CONNECTIONS)
 
 
-# -------------------------- 工具函数 --------------------------
+# -------------------------- 工具函数 -------------------------- #
 def uint_to_bytes(value: int, byte_length: int) -> bytes:
     """将整数转换为指定长度的小端序字节流"""
     if byte_length == 2:
@@ -100,7 +104,7 @@ def uuid_to_bytes(token: str) -> bytes:
     return uuid.UUID(token).bytes
 
 
-# -------------------------- Token获取 --------------------------
+# -------------------------- Token获取 -------------------------- #
 def get_paint_token(uid: int, access_key: str) -> Optional[str]:
     """获取绘画所需的Token"""
     try:
@@ -120,106 +124,79 @@ def get_paint_token(uid: int, access_key: str) -> Optional[str]:
                 return None
             return data.get("token")
         return None
-    except Exception as e:
-        logger.warning("获取Token时出错: %s", e)
-        return None
+    except Exception as error:
+        logger.warning("获取Token时出错: %s", error)
+        raise error
 
 
-# -------------------------- 图像处理（支持自定义尺寸） --------------------------
+# -------------------------- 图像处理 -------------------------- #
 def read_image(image_path: str, target_size: Tuple[int, int]) -> Optional[np.array]:
     """
     读取图片并保持原始尺寸，返回像素数据
     :param image_path: 图片路径
-    :return: 像素数据
-    像素数据格式：[height][width] 二维列表
+    :param target_size: 目标尺寸
+    :return: 像素数据 np.array[height][width]
     """
     try:
         with Image.open(image_path) as img:
-            # 获取图片尺寸
-            logger.info(
-                "图片原始尺寸: (%s, %s)，目标尺寸：(%s, %s)", *img.size, *target_size
-            )
+            # 获取尺寸
             width, height = target_size
-
-            # 校验尺寸是否符合画板最大限制（1000x600）
-            if not (0 < width <= 1000 and 0 < height <= 600):
-                logger.warning(
-                    "图片尺寸(%s, %s)超出画板限制（最大1000x600）", *target_size
-                )
-                return None
-
-            # 转换为RGB模式（去除Alpha透明通道，避免像素颜色异常）
-            img = img.convert("RGB").resize(target_size)
-
             logger.info(
-                "成功读取图片：尺寸(%s, %s)，总像素%s个",
+                "读取图片：尺寸(%s, %s)，像素数%s",
                 *target_size,
                 width * height,
             )
-            return np.asarray(img)
 
+            # 校验尺寸
+            if not (0 < width <= 1000 and 0 < height <= 600):
+                logger.warning("图片尺寸(%s, %s)超出画板限制(1000, 600)", *target_size)
+                return None
+
+            # 转换为RGB模式（去除Alpha透明通道，避免像素颜色异常）
+            logger.info("尺寸转换: (%s, %s) -> (%s, %s)", *img.size, *target_size)
+            img = img.convert("RGB").resize(target_size)
+
+            return np.asarray(img)
     except FileNotFoundError:
         logger.error("图片文件未找到：%s", image_path)
         return None
-    except Exception as e:
-        logger.error("读取图片时出错: %s", e)
-        return None
+    except Exception as error:
+        logger.error("读取图片时出错: %s", error)
+        raise error
 
 
-# def chunk_image(pixels: List[List[Dict]], chunk_num: int) -> List[List[List[Dict]]]:
-#     """将图片分为 chunk_num 个块，大pixels的行数被均分。对于每个chunk，如果总数无法被整除，则最后一个块将多一些"""
-#     if chunk_num <= 0:
-#         raise ValueError("chunk_num 必须大于0")
-
-#     total_rows = len(pixels)
-#     if total_rows == 0:
-#         return []
-
-#     # 计算每个块的基础行数和余数
-#     base_rows_per_chunk = total_rows // chunk_num
-#     remainder = total_rows % chunk_num
-
-#     chunks = []
-#     start_row = 0
-
-#     for i in range(chunk_num):
-#         # 前remainder个块会多分配一行
-#         rows_in_this_chunk = base_rows_per_chunk + int(i < remainder)
-#         end_row = start_row + rows_in_this_chunk
-
-#         # 提取当前块的像素数据
-#         chunk = pixels[start_row:end_row]
-#         chunks.append(chunk)
-
-#         start_row = end_row
-
-#     return chunks
+# ------------------------- 结构体定义 ------------------------- #
+PaintEvent = collections.namedtuple("PaintEvent", ["x", "y", "r", "g", "b"])
+PaintResult = collections.namedtuple("PaintResult", ["paint_id", "status"])
 
 
-# -------------------------- 任务定义 --------------------------
-PaintTask = collections.namedtuple("PaintTask", ["x", "y", "r", "g", "b"])
-MaintainTask = collections.namedtuple("MaintainTask", ["x", "y", "r", "g", "b"])
-
-
-# -------------------------- WebSocket客户端 --------------------------
+# ---------------------- WebSocket客户端 ---------------------- #
 class PaintboardClient:
-    def __init__(self, uid: int, token: str, access_key: str):
+    """绘画客户端"""
+
+    def __init__(self, uid: int, access_key: str, token: str):
         self.access_key = access_key
         self.uid = uid
         self.token = token
-        self.ws: Optional[websockets.asyncio.client.ClientConnection] = None
+        self.ws: Optional[websockets.connect] = None
         self.paint_id = 0  # 绘画识别码（自增，确保唯一性）
         self.paint_queue = bytearray()  # 绘画包队列（处理粘包）
-        self.connected = False  # 连接状态标记
         self.send_lock = asyncio.Lock()  # 发送锁
+        self.recv_lock = asyncio.Lock()  # 接收锁
         self.packet_counter = 0  # 包计数器
         self.last_send_time = 0  # 上次发送时间
 
+    async def shutdown(self):
+        """关闭客户端"""
+        await connection_semaphore.release()
+        if self.connection_check():
+            await self.ws.close()
+
     async def connect(self) -> bool:
         """建立WebSocket连接"""
+        await connection_semaphore.acquire()
         try:
             self.ws = await websockets.connect(WS_URL)
-            self.connected = True
             logger.info("WebSocket连接成功")
             # 启动粘包发送任务
             asyncio.create_task(self._send_queued_paint())
@@ -227,15 +204,19 @@ class PaintboardClient:
         except websockets.exceptions.WebSocketException as e:
             logger.warning("WebSocket连接失败: %s", e)
             return False
-        except Exception as e:
-            logger.error("连接异常: %s", e)
-            return False
+        except Exception as error:
+            logger.error("连接异常: %s", error)
+            raise error
+
+    def connection_check(self) -> bool:
+        """检查连接状况"""
+        return self.ws and self.ws.state == State.OPEN
 
     async def _send_queued_paint(self):
         """定时发送队列中的绘画请求（处理粘包逻辑）"""
-        while self.connected:
+        while self.connection_check():
             queue_size = len(self.paint_queue)
-            if queue_size > 0 and self.ws and self.ws.state == State.OPEN:
+            if queue_size > 0 and self.connection_check():
                 try:
                     # 检查是否有数据包进行发送
                     packet_count = queue_size // 29  # 每个包29字节
@@ -262,28 +243,57 @@ class PaintboardClient:
                     else:
                         # 数据包太少，等待积累更多数据
                         await asyncio.sleep(0.01)
-                except Exception as e:
-                    logger.warning("发送绘画请求失败: %s", e)
+                except Exception as error:
+                    logger.warning("发送绘画请求失败: %s", error)
+                    raise error
             await asyncio.sleep(BATCH_SEND_INTERVAL)  # 批量发送间隔
 
     async def _handle_messages(self):
         """持续处理服务端消息（心跳、绘画结果等）"""
-        while self.connected and self.ws and self.ws.state == State.OPEN:
+        while self.connection_check():
             try:
-                message = await self.ws.recv()
+                async with self.recv_lock:
+                    message = await self.ws.recv()
                 if isinstance(message, bytes):
-                    await self._parse_message(message)
+                    await self._response_message(message)
             except websockets.exceptions.ConnectionClosed as e:
                 logger.warning(
                     "WebSocket连接已关闭：代码 %s，原因：%s", e.code, e.reason
                 )
-                self.connected = False
                 break
-            except Exception as e:
-                logger.warning("处理消息异常: %s", e)
+            except Exception as error:
+                logger.warning("处理消息异常: %s", error)
+                raise error
 
-    async def _parse_message(self, data: bytes):
-        """解析服务端二进制消息"""
+    async def _response_message(self, data: bytes):
+        """响应服务端二进制消息"""
+        for res in self._parse_message(data):
+            if res is None:
+                if self.connection_check():
+                    await self.ws.send(bytes([OP_C2S_HEARTBEAT]))
+            elif isinstance(res, PaintResult):
+                status_msg = PAINT_STATUS.get(res.status, f"未知状态码{res.status}")
+                logger.debug(
+                    "绘画结果[AccessKey: %s, ID: %s]: %s",
+                    self.access_key,
+                    res.paint_id,
+                    status_msg,
+                )
+                try:
+                    async with paint_events_lock:  # TODO: 减少miss key次数及丢包率
+                        event = paint_events.pop(res.paint_id)
+                    if res.status == 0xEE:  # 冷却状态
+                        await task_queue.put(event)
+                        logger.info("检测到冷却状态，增加等待时间")
+                        await asyncio.sleep(10)
+                except KeyError:
+                    pass
+            elif isinstance(res, PaintEvent):
+                # 将他人修改的像素信息加入维护队列
+                await maintain_queue.put(res)
+
+    def _parse_message(self, data: bytes) -> List[Optional[PaintEvent | PaintResult]]:
+        res = []
         offset = 0
         total_len = len(data)
 
@@ -293,31 +303,15 @@ class PaintboardClient:
 
             # 处理心跳请求（立即回复Pong）
             if op == OP_S2C_HEARTBEAT:
-                if self.ws and self.ws.state == State.OPEN:
-                    await self.ws.send(bytes([OP_C2S_HEARTBEAT]))
-                continue
-
+                res.append(None)
             # 处理绘画结果（反馈成功/冷却等状态）
             elif op == OP_S2C_PAINT_RESULT:
                 if offset + 5 > total_len:
-                    logger.warning("绘画结果数据不完整，跳过")
                     break
                 paint_id = struct.unpack("<I", data[offset : offset + 4])[0]
                 status = data[offset + 4]
+                res.append(PaintResult(paint_id, status))
                 offset += 5
-                status_msg = PAINT_STATUS.get(status, f"未知状态码{status}")
-                logger.debug(
-                    "绘画结果[AccessKey: %s, ID: %s]: %s",
-                    self.access_key,
-                    paint_id,
-                    status_msg,
-                )
-                # 如果是冷却状态，增加等待时间
-                if status == 0xEE:  # 冷却中
-                    logger.info("检测到冷却状态，增加等待时间")
-                    await asyncio.sleep(10)
-                continue
-
             # 处理他人绘画消息（用于维护模式）
             elif op == OP_S2C_PAINT_MSG:
                 if offset + 6 > total_len:
@@ -327,32 +321,28 @@ class PaintboardClient:
                 r = data[offset + 4]
                 g = data[offset + 5]
                 b = data[offset + 6]
+                res.append(PaintEvent(x, y, r, g, b))
                 offset += 7
-
-                # 将他人修改的像素信息加入维护队列
-                await maintain_queue.put(MaintainTask(x, y, r, g, b))
-                continue
-
-            # 未知操作码
             else:
-                logger.warning("收到未知操作码: %s，跳过", op)
+                logger.warning("收到未知操作码: %s", op)
                 break
+        return res
 
-    async def paint_pixel(
-        self, x: int, y: int, r: int, g: int, b: int
-    ) -> Optional[int]:
+    async def paint_pixel(self, event: PaintEvent) -> Optional[int]:
         """发送单个像素的绘画请求"""
         # 校验连接状态
-        if not self.connected or not self.ws or self.ws.state != State.OPEN:
+        if not self.connection_check():
             logger.warning("未连接到服务器，无法发送绘画请求")
             return None
 
-        # 校验坐标范围（画板0≤x<1000，0≤y<600）
+        x, y, r, g, b = event
+
+        # 校验坐标范围 ([0, 1000), [0, 600))
         if not (0 <= x < 1000 and 0 <= y < 600):
             logger.warning("坐标(%s, %s)超出画板范围，跳过", x, y)
             return None
 
-        # 校验颜色值（0-255）
+        # 校验颜色值 [0, 255]
         if not (0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255):
             logger.warning("颜色值(%s, %s, %s)无效，跳过", r, g, b)
             return None
@@ -374,9 +364,12 @@ class PaintboardClient:
         packet.extend(uint_to_bytes(current_id, 4))
 
         # 加入发送队列（粘包处理）
+        await asyncio.sleep(BATCH_SEND_INTERVAL)
+        async with paint_events_lock:
+            paint_events.update({current_id: event})
         async with self.send_lock:
             self.paint_queue.extend(packet)
-        await asyncio.sleep(0.16)
+
         return current_id
 
     async def worker(self):
@@ -392,24 +385,21 @@ class PaintboardClient:
             await asyncio.sleep(1)
 
             # 处理绘制任务
-            while self.connected:
+            while self.connection_check():
                 try:
                     # 从任务队列获取绘制任务
                     task = await asyncio.wait_for(task_queue.get(), timeout=1.0)
-                    if isinstance(task, PaintTask):
-                        await self.paint_pixel(*task)
+                    await self.paint_pixel(task)
                     task_queue.task_done()
                 except asyncio.TimeoutError:
                     # 超时继续循环
                     continue
-                except Exception as e:
-                    logger.error("处理绘制任务异常: %s", e)
-
+                except Exception as error:
+                    logger.error("处理绘制任务异常: %s", error)
+                    raise error
         finally:
             # 清理资源
-            self.connected = False
-            if self.ws and self.ws.state == State.OPEN:
-                await self.ws.close()
+            await self.shutdown()
             logger.info("客户端已关闭，总共发送了 %s 个数据包", self.packet_counter)
 
     async def maintainer(self, pixels: np.array, start_x: int, start_y: int):
@@ -436,49 +426,40 @@ class PaintboardClient:
             )
 
             # 处理维护任务
-            while self.connected:
+            while self.connection_check():
                 try:
                     # 从维护队列获取任务
                     task = await asyncio.wait_for(maintain_queue.get(), timeout=1.0)
-                    if isinstance(task, MaintainTask):
-                        # 检查是否在监控区域内
-                        if (
-                            start_x <= task.x < start_x + width
-                            and start_y <= task.y < start_y + height
-                        ):
-                            # 获取该位置应该的颜色
-                            r, g, b = pixels[task.y - start_y, task.x - start_x]
+                    # 检查是否在监控区域内
+                    x = task.x - start_x
+                    y = task.y - start_y
+                    if 0 <= x < width and 0 <= y < height:
+                        # 获取该位置应该的颜色
+                        r, g, b = pixels[y][x]
 
-                            # 检查颜色是否被修改
-                            if r != task.r or g != task.g or b != task.b:
-                                logger.info(
-                                    "检测到像素被修改: (%s,%s): (%s, %s, %s) -> (%s, %s, %s)",
-                                    *task,
-                                    r,
-                                    g,
-                                    b,
-                                )
+                        # 检查颜色是否被修改
+                        if r != task.r or g != task.g or b != task.b:
+                            logger.debug(
+                                "检测到像素(%s, %s)被修改: (%s, %s, %s) -> (%s, %s, %s)",
+                                r,
+                                g,
+                                b,
+                                *task,
+                            )
 
-                                # 重新绘制正确的颜色
-                                await self.paint_pixel(
-                                    task.x,
-                                    task.y,
-                                    r,
-                                    g,
-                                    b,
-                                )
+                            # 重新绘制正确的颜色
+                            await self.paint_pixel(PaintEvent(task.x, task.y, r, g, b))
                     maintain_queue.task_done()
                 except asyncio.TimeoutError:
                     # 超时继续循环
                     continue
-                except Exception as e:
-                    logger.error("处理维护任务异常: %s", e)
+                except Exception as error:
+                    logger.error("处理维护任务异常: %s", error)
+                    raise error
 
         finally:
             # 清理资源
-            self.connected = False
-            if self.ws and self.ws.state == State.OPEN:
-                await self.ws.close()
+            await self.shutdown()
             logger.info("维护客户端已关闭，总共发送了 %s 个数据包", self.packet_counter)
 
 
@@ -487,20 +468,15 @@ async def fill_task_queue(
 ):
     """将图像像素填充到任务队列中"""
     height = len(pixels)
-    if height == 0:
-        logger.warning("像素数据为空，无法填充任务队列")
-        return
     width = len(pixels[0])
-
-    # # 校验所有行宽度一致
-    # if any(len(row) != width for row in pixels):
-    #     logger.warning("像素数据各行宽度不一致，无效数据")
-    #     return
+    if height == 0:
+        logger.warning("像素数据为空")
+        return
 
     # 校验绘制范围是否超出画板
     if start_x < 0 or start_y < 0 or start_x + width > 1000 or start_y + height > 600:
         logger.warning(
-            "绘制范围超出画板！起始(%s, %s)+尺寸(%s, %s) > (1000, 600)",
+            "绘制范围超出画板: 起始(%s, %s) + 尺寸(%s, %s)",
             start_x,
             start_y,
             width,
@@ -509,7 +485,7 @@ async def fill_task_queue(
         return
 
     logger.info(
-        "开始填充任务队列：起始位置(%s, %s)，尺寸(%s, %s)",
+        "填充任务队列：起始(%s, %s)，尺寸(%s, %s)",
         start_x,
         start_y,
         width,
@@ -517,38 +493,43 @@ async def fill_task_queue(
     )
 
     # 将所有像素任务加入队列
-    task_count = 0
     for y in range(height):
         for x in range(width):
             r, g, b = pixels[y][x]
             if ignore_white and (r, g, b) == (255, 255, 255):
                 continue
-            await task_queue.put(PaintTask(start_x + x, start_y + y, r, g, b))
-            task_count += 1
+            paint_event = PaintEvent(start_x + x, start_y + y, r, g, b)
+            await task_queue.put(paint_event)
 
-    logger.info("任务队列填充完成，共添加 %s 个任务", task_count)
+    logger.info("任务队列填充完成，共添加 %s 个任务", task_queue.qsize())
 
 
 async def main():
     """
-    使用任务队列处理多账号绘图
+    使用任务队列进行多账号绘图
     """
     try:
         with open("config.yml", "r", encoding="utf-8") as file:
             config = yaml.load(file, yaml.Loader)
-    except FileNotFoundError as e:
-        logger.error("找不到配置文件：%s", e.filename)
+        assert isinstance(config, dict)
+    except FileNotFoundError as error:
+        logger.error("找不到配置文件：%s", error.filename)
         return
 
     settings = config.get("settings")
     accounts = config.get("accounts")
+    if not any((settings, accounts)):
+        logger.error("配置项缺失")
+        return
 
     start_x, start_y = settings.get("pos")
     # 1. 获取账号列表和token
-    tokens = [get_paint_token(uid, key) for uid, key in accounts]
-    if not any(tokens):
-        logger.error("获取Token失败")
+    tokens = [get_paint_token(*account) for account in accounts]
+    if len(tokens) == 0:
+        logger.error("Token获取失败")
         return
+    if not any(tokens):
+        logger.warning("部分Token获取失败")
 
     # 2. 读取图片
     pixels = read_image(settings.get("pic"), settings.get("size"))
@@ -557,47 +538,28 @@ async def main():
         return
 
     # 3. 填充任务队列
-    await fill_task_queue(pixels, start_x, start_y)
+    await fill_task_queue(pixels, start_x, start_y, True)
 
-    # 4. 启动工作客户端
-    workers = []
-    tasks = []
-
-    # 创建工作客户端
-    for token, (uid, access_key) in zip(tokens, accounts):
-        client = PaintboardClient(uid, token, access_key)
-        workers.append(client)
-
-        # 为每个客户端创建工作协程
+    # 4. 启动客户端
+    clients: PaintboardClient = []
+    tasks: asyncio.Task = []
+    for token, account in zip(tokens, accounts):
+        client = PaintboardClient(*account, token)
+        # worker
         task = asyncio.create_task(client.worker())
+        clients.append(client)
+        tasks.append(task)
+        # maintainer
+        task = asyncio.create_task(client.maintainer(pixels, start_x, start_y))
+        clients.append(client)
         tasks.append(task)
 
-    # 5. 启动维护客户端（使用第一个账号）
-    maintainer_client = PaintboardClient(accounts[0][0], tokens[0], accounts[0][1])
-    maintainer_task = asyncio.create_task(
-        maintainer_client.maintainer(pixels, start_x, start_y)
-    )
-    tasks.append(maintainer_task)
-
-    # 6. 等待所有任务完成
+    # 5. 等待所有任务完成
     try:
         await asyncio.gather(*tasks)
-    except KeyboardInterrupt:
-        logger.info("程序被用户中断")
-    except Exception as e:
-        logger.error("程序运行异常: %s", e)
     finally:
-        # 确保所有客户端都正确关闭
-        for client in workers:
-            if client.connected:
-                client.connected = False
-                if client.ws and client.ws.state == State.OPEN:
-                    await client.ws.close()
-        if maintainer_client.connected:
-            maintainer_client.connected = False
-            if maintainer_client.ws and maintainer_client.ws.state == State.OPEN:
-                await maintainer_client.ws.close()
-        logger.info("所有客户端已关闭")
+        for client in clients:
+            await client.shutdown()
 
 
 if __name__ == "__main__":
