@@ -16,7 +16,6 @@ import requests
 import websockets
 import numpy as np
 from PIL import Image
-from websockets.protocol import State
 
 
 def get_logger(level=logging.INFO):
@@ -74,7 +73,7 @@ MAX_PACKETS_PER_SECOND_PER_CONNECTION = 128  # 每连接每秒最多128个包
 SEND_INTERVAL = 1.0 / MAX_PACKETS_PER_SECOND_PER_CONNECTION
 
 # 粘包设置
-BATCH_SEND_INTERVAL = 0.02
+BATCH_SEND_INTERVAL = 0.05
 
 # 任务队列
 task_queue = asyncio.Queue()
@@ -176,13 +175,12 @@ PaintResult = collections.namedtuple("PaintResult", ["paint_id", "status"])
 class PaintboardClient:
     """绘画客户端"""
 
-    async def __init__(self, uid: int, access_key: str, token: str):
-        await client_semaphore.acquire()
+    def __init__(self, uid: int, access_key: str, token: str):
         self.access_key = access_key
         self.uid = uid
         self.token = token
-        self.ws: Optional[websockets.connect] = None
-        self.paint_id = (id(self) ^ hash(self)) % 4294967296  # 绘画识别码（自增，确保唯一性）
+        self.ws: Optional[websockets.client.ClientConnection] = None
+        self.paint_id = hash(self) % 4294967296  # 绘画识别码（自增，确保唯一性）
         self.paint_queue = bytearray()  # 绘画包队列（处理粘包）
         self.send_lock = asyncio.Lock()  # 发送锁
         self.recv_lock = asyncio.Lock()  # 接收锁
@@ -200,10 +198,12 @@ class PaintboardClient:
 
     async def connect(self) -> bool:
         """建立WebSocket连接"""
+        if self.connection_check():
+            return True
         await connection_semaphore.acquire()
         try:
             self.ws = await websockets.connect(WS_URL)
-            logger.info("WebSocket连接成功")
+            logger.info("WebSocket连接成功: %s", self.ws.remote_address)
             # 启动粘包发送任务
             asyncio.create_task(self._send_queued_paint())
             return True
@@ -216,13 +216,13 @@ class PaintboardClient:
 
     def connection_check(self) -> bool:
         """检查连接状况"""
-        return self.ws and self.ws.state == State.OPEN
+        return self.ws and self.ws.state == websockets.protocol.State.OPEN
 
     async def _send_queued_paint(self):
         """定时发送队列中的绘画请求（处理粘包逻辑）"""
-        while self.connection_check():
+        while True:
             queue_size = len(self.paint_queue)
-            if queue_size > 0 and self.connection_check():
+            if queue_size > 0:
                 try:
                     # 检查是否有数据包进行发送
                     packet_count = queue_size // 29  # 每个包29字节
@@ -249,6 +249,8 @@ class PaintboardClient:
                     else:
                         # 数据包太少，等待积累更多数据
                         await asyncio.sleep(0.01)
+                except websockets.exceptions.ConnectionClosed:
+                    break
                 except Exception as error:
                     logger.warning("发送绘画请求失败: %s", error)
                     raise error
@@ -256,16 +258,14 @@ class PaintboardClient:
 
     async def _handle_messages(self):
         """持续处理服务端消息（心跳、绘画结果等）"""
-        while self.connection_check():
+        while True:
             try:
                 async with self.recv_lock:
                     message = await self.ws.recv()
                 if isinstance(message, bytes):
                     await self._response_message(message)
-            except websockets.exceptions.ConnectionClosed as e:
-                logger.warning(
-                    "WebSocket连接已关闭：代码 %s，原因：%s", e.code, e.reason
-                )
+            except websockets.exceptions.ConnectionClosed as error:
+                logger.warning("WebSocket连接已关闭(%s %s)", error.rcvd.code, error.rcvd.reason)
                 break
             except Exception as error:
                 logger.warning("处理消息异常: %s", error)
@@ -275,8 +275,11 @@ class PaintboardClient:
         """响应服务端二进制消息"""
         for res in self._parse_message(data):
             if res is None:
-                if self.connection_check():
-                    await self.ws.send(bytes([OP_C2S_HEARTBEAT]))
+                try:
+                    await self.ws.send(OP_C2S_HEARTBEAT.to_bytes())
+                except websockets.exceptions.ConnectionClosedError as error:
+                    logger.warning("WebSocket连接已关闭(%s %s)", error.rcvd.code, error.rcvd.reason)
+                    break
             elif isinstance(res, PaintResult):
                 status_msg = PAINT_STATUS.get(res.status, f"未知状态码{res.status}")
                 logger.debug(
@@ -336,11 +339,6 @@ class PaintboardClient:
 
     async def paint_pixel(self, event: PaintEvent) -> Optional[int]:
         """发送单个像素的绘画请求"""
-        # 校验连接状态
-        if not self.connection_check():
-            logger.warning("未连接到服务器，无法发送绘画请求")
-            return None
-
         x, y, r, g, b = event
 
         # 校验坐标范围 ([0, 1000), [0, 600))
@@ -403,10 +401,12 @@ class PaintboardClient:
                 except Exception as error:
                     logger.error("处理绘制任务异常: %s", error)
                     raise error
+        except Exception as error:
+            raise error
         finally:
             # 清理资源
             await self.shutdown()
-            logger.info("客户端已关闭，总共发送了 %s 个数据包", self.packet_counter)
+            logger.info("工作客户端已关闭，总共发送了 %s 个数据包", self.packet_counter)
 
     async def maintainer(self, pixels: np.array, start_x: int, start_y: int):
         """维护协程：从维护队列获取任务并执行"""
@@ -424,7 +424,7 @@ class PaintboardClient:
             height = len(pixels)
 
             logger.info(
-                "维护者开始监听区域 (%s,%s) 到 (%s,%s)",
+                "维护者开始监听区域 (%s, %s) 到 (%s, %s)",
                 start_x,
                 start_y,
                 start_x + width - 1,
@@ -462,7 +462,8 @@ class PaintboardClient:
                 except Exception as error:
                     logger.error("处理维护任务异常: %s", error)
                     raise error
-
+        except Exception as error:
+            raise error
         finally:
             # 清理资源
             await self.shutdown()
@@ -551,7 +552,8 @@ async def main():
     clients: PaintboardClient = []
     tasks: asyncio.Task = []
     for token, account in zip(tokens, accounts):
-        client = await PaintboardClient(*account, token)
+        await client_semaphore.acquire()
+        client = PaintboardClient(*account, token)
         # worker
         task = asyncio.create_task(client.worker())
         clients.append(client)
