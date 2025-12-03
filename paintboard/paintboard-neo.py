@@ -1,9 +1,7 @@
 import time
 import uuid
-import logging
 import asyncio
-import struct
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import yaml
 import colorlog
@@ -12,13 +10,13 @@ import websockets
 from PIL import Image
 
 
-def get_logger(level=logging.INFO):
+def get_colorful_logger(level=colorlog.INFO):
     """生成带颜色的日志输出"""
     # 创建logger对象
-    log = logging.getLogger()
-    log.setLevel(level)
+    logger_obj = colorlog.getLogger()
+    logger_obj.setLevel(level)
     # 创建控制台日志处理器
-    console_handler = logging.StreamHandler()
+    console_handler = colorlog.StreamHandler()
     console_handler.setLevel(level)
     # 定义颜色输出格式
     color_formatter = colorlog.ColoredFormatter(
@@ -28,16 +26,17 @@ def get_logger(level=logging.INFO):
     # 将颜色输出格式添加到控制台日志处理器
     console_handler.setFormatter(color_formatter)
     # 移除默认的handler
-    for handler in log.handlers:
-        log.removeHandler(handler)
+    for handler in logger_obj.handlers:
+        logger_obj.removeHandler(handler)
     # 将控制台日志处理器添加到logger对象
-    log.addHandler(console_handler)
-    return log
+    logger_obj.addHandler(console_handler)
+    return logger_obj
 
 
-logger = get_logger()
+logger = get_colorful_logger()
 
 BASE_DOMIN = "paintboard.luogu.me"
+GET_BOARD_URL = f"https://{BASE_DOMIN}/api/paintboard/getboard"
 GET_TOKEN_URL = f"https://{BASE_DOMIN}/api/auth/gettoken"
 WS_URL = f"wss://{BASE_DOMIN}/api/paintboard/ws"
 
@@ -59,13 +58,30 @@ PAINT_STATUS = {
     0xEA: "服务器错误",
 }
 
-MAX_CLIENTS = 3
 MAX_CONNECTIONS = 3
 MAX_PACKETS_PER_SECOND_PER_CONNECTION = 128
 SEND_INTERVAL = 1.0 / MAX_PACKETS_PER_SECOND_PER_CONNECTION
 BATCH_SEND_INTERVAL = 0.05
 
-work_queue = asyncio.Queue()
+pixel_queue = asyncio.Queue()
+
+connection_semaphore = asyncio.Semaphore(MAX_CONNECTIONS)
+
+
+def get_board() -> bytes:
+    """Get paint board"""
+    resp = requests.get(GET_BOARD_URL, timeout=10)
+    resp.raise_for_status()
+    buffer = resp.content
+    pixels = []
+    for y in range(600):
+        row = []
+        for x in range(1000):
+            base = y * 1000 * 3 + x * 3
+            pixel = (buffer[base], buffer[base + 1], buffer[base + 2])
+            row.append(pixel)
+        pixels.append(row)
+    return pixels
 
 
 def access_token(uid: int, key: str) -> str:
@@ -80,25 +96,68 @@ def access_token(uid: int, key: str) -> str:
         resp.raise_for_status()
         res = resp.json()
     except (requests.HTTPError, requests.JSONDecodeError) as error:
-        logger.warning("获取PaintKey时出现错误: %s", error)
+        logger.error("获取PaintKey时出现错误: %s", error)
+        raise error
+    data = res.get("data")
     assert (
-        res.get("token") is not None
-    ), f"PaintKey获取失败(uid: {uid}): {res.get("errorType")}"
-    return res.get("token")
+        data is not None and data.get("token") is not None
+    ), f"PaintKey获取失败(uid: {uid}): {data.get("errorType")}"
+    return data.get("token")
 
 
 class PaintClient:
     """Paint client"""
 
-    def __init__(self, token: str):
-        self.token = token
+    def __init__(self, account: Tuple[int, str]):
+        self.uid, self.key = account
+        self.token = access_token(*account)
         self.ws: Optional[websockets.ClientConnection] = None
+        self.packet_count = 0
+
+    async def connect(self):
+        """Connect to server"""
+        await connection_semaphore.acquire()
+        self.ws = await websockets.connect(WS_URL)
+
+    async def disconnect(self):
+        """Disconnect from server"""
+        if self.ws is not None:
+            self.ws.close()
+        connection_semaphore.release()
+
+    async def pack(
+        self, pixel: Tuple[Tuple[int, int], Tuple[int, int, int]]
+    ) -> bytearray:
+        """Pack C2S message"""
+        # 构建绘画数据包（共29字节：8字节头部 + 21字节附加信息）
+        ((x, y), (r, g, b)) = pixel
+        self.packet_count = (self.packet_count + 1) % 4294967296  # uint32 max
+        packet = bytearray()
+        # 头部：操作码(1) + x(2) + y(2) + R(1) + G(1) + B(1)
+        packet.append(OP_C2S_PAINT)
+        packet.extend(x.to_bytes(2, "little"))
+        packet.extend(y.to_bytes(2, "little"))
+        packet.extend((r, g, b))
+        # 附加信息：UID(3) + Token(16) + 绘画ID(4)
+        packet.extend(self.uid.to_bytes(3, "little"))
+        packet.extend(uuid.UUID(self.token).bytes)
+        packet.extend(self.packet_count.to_bytes(4, "little"))
+        return packet
+
+    async def unpack(self):
+        """Unpack S2C message"""
+        # TODO
+        pass
+
+    async def _event_handler(self):
+        """Handling events"""
+        # TODO
+        pass
 
     async def worker(self):
-        pass  # TODO
-
-    async def maintainer(self):
-        pass  # TODO
+        """Main worker"""
+        asyncio.create_task(self._event_handler())
+        # TODO
 
 
 async def main():
@@ -125,21 +184,18 @@ async def main():
     for x in range(width):
         for y in range(height):
             if not (settings.get("ignore_white") and pixels[x, y] == (255, 255, 255)):
-                await work_queue.put(((x, y), pixels[x, y]))
+                await pixel_queue.put(((x, y), pixels[x, y]))
 
-    # Step 4: access PaintKey
-    tokens = [access_token(*account) for account in accounts]
+    # Step 4: create tasks and run
+    try:
+        clients = [PaintClient(account) for account in accounts]
+        workers = [asyncio.create_task(client.worker()) for client in clients]
+        asyncio.gather(*workers)
 
-    # Step 5: create tasks and run
-    clients = [PaintClient(token) for token in tokens]
-    workers = [asyncio.create_task(client.worker()) for client in clients]
-    maintainers = [asyncio.create_task(client.maintainer()) for client in clients]
-    asyncio.gather(*workers, *maintainers)
-
-    # Step 6: clean
-    for client in clients:
-        if client.ws is not None:
-            await client.ws.close()
+    # Step 5: close connection
+    finally:
+        for client in clients:
+            await client.disconnect()
 
 
 if __name__ == "__main__":

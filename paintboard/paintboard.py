@@ -265,7 +265,9 @@ class PaintboardClient:
                 if isinstance(message, bytes):
                     await self._response_message(message)
             except websockets.exceptions.ConnectionClosed as error:
-                logger.warning("WebSocket连接已关闭(%s %s)", error.rcvd.code, error.rcvd.reason)
+                logger.warning(
+                    "WebSocket连接已关闭(%s %s)", error.rcvd.code, error.rcvd.reason
+                )
                 break
             except Exception as error:
                 logger.warning("处理消息异常: %s", error)
@@ -278,7 +280,9 @@ class PaintboardClient:
                 try:
                     await self.ws.send(OP_C2S_HEARTBEAT.to_bytes())
                 except websockets.exceptions.ConnectionClosedError as error:
-                    logger.warning("WebSocket连接已关闭(%s %s)", error.rcvd.code, error.rcvd.reason)
+                    logger.warning(
+                        "WebSocket连接已关闭(%s %s)", error.rcvd.code, error.rcvd.reason
+                    )
                     break
             elif isinstance(res, PaintResult):
                 status_msg = PAINT_STATUS.get(res.status, f"未知状态码{res.status}")
