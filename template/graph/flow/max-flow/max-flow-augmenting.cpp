@@ -14,35 +14,6 @@ int capacity() {
                            [](int a, const PII& b) { return a + b.second; });
 }
 
-namespace Naive {
-
-std::vector<bool> vis;
-
-std::pair<bool, int> naive(int u, int neck) {
-    if (u == t) return {true, neck};
-    vis[u] = true;
-    bool flag = false;
-    for (auto& [v, w] : g[u]) {
-        if (w == 0 || vis[v]) continue;
-        std::tie(flag, neck) = naive(v, std::min(neck, w));
-        if (flag) {
-            w -= neck;
-            break;
-        }
-    }
-    vis[u] = false;
-    return {flag, neck};
-}
-
-int naive() {
-    vis.resize(n + 1);
-    auto prev = capacity();
-    while (naive(s, MAX).first);
-    return prev - capacity();
-}
-
-}  // namespace Naive
-
 namespace FordFulkerson {
 
 std::vector<bool> vis;
@@ -55,7 +26,7 @@ std::pair<bool, int> ford_fulkerson(int u, int neck) {
         if (w == 0 || vis[v]) continue;
         std::tie(flag, neck) = ford_fulkerson(v, std::min(neck, w));
         if (flag) {
-            g[v][u] += neck;  // the only difference
+            g[v][u] += neck;
             w -= neck;
             break;
         }
@@ -76,8 +47,8 @@ int ford_fulkerson() {
 namespace EdmondsKarp {
 
 std::vector<int> shortest_path() {
-    std::vector<bool> vis(n + 1);
-    std::vector<int> fa(n + 1);
+    std::vector<bool> vis(g.size());
+    std::vector<int> fa(g.size());
     std::queue<int> que;
     que.push(s);
     while (!que.empty()) {
@@ -114,21 +85,42 @@ int edmonds_karp() {
 
 namespace Dinic {
 
-std::vector<int> lv;
+std::vector<int> dep;
 
 bool bfs() {
-    // TODO
+    dep.assign(g.size(), 0);
+    std::queue<int> que;
+    dep[s] = 1;
+    que.push(s);
+    while (!que.empty()) {
+        auto u = que.front();
+        que.pop();
+        for (const auto& [v, w] : g[u]) {
+            if (dep[v] || w == 0) continue;
+            dep[v] = dep[u] + 1;
+            que.push(v);
+        }
+    }
+    return dep[t] != 0;
 }
 
-int dfs(int u) {
-    // TODO
+int dfs(int u, int resi) {
+    if (u == t || resi == 0) return resi;
+    for (auto& [v, w] : g[u]) {
+        if (dep[v] == dep[u] + 1 && (resi = dfs(v, std::min(resi, w)))) {
+            g[v][u] += resi;
+            w -= resi;
+            if (resi == 0) return resi;
+            // TODO
+        }
+    }
+    return resi;
 }
 
 int dinic() {
-    lv.resize(n + 1);
-    int ans = 0;
-    while (bfs()) ans += dfs(s);
-    return ans;
+    auto prev = capacity();
+    while (bfs()) dfs(s, MAX);
+    return prev - capacity();
 }
 
 }  // namespace Dinic
